@@ -1,0 +1,18 @@
+# Example systemd service file with intentional errors
+# This file can be used to test the diagnostic capabilities of the LSP
+
+[Unit]
+Description=Service with validation errors
+After=network.target
+
+[Service]
+Type=invalid-type
+ExecStart=
+Restart=unknown-policy
+InvalidDirective=some-value
+
+[UnknownSection]
+SomeDirective=value
+
+[Install]
+WantedBy=multi-user.target
