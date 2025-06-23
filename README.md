@@ -4,6 +4,8 @@ A Language Server Protocol (LSP) implementation for systemd unit files, providin
 
 ## Features
 
+![Demo](examples/demo.gif)
+
 ### Core Language Server Features
 
 - **Syntax Analysis** - Complete parsing of systemd unit file structure
