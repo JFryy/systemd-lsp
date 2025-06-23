@@ -1,0 +1,12 @@
+**Type**
+
+Configures the process start-up type for this service unit. One of:
+- **simple** (default): systemd considers the service to be started up immediately
+- **exec**: like simple, but systemd will wait for exec() in the main service process
+- **forking**: the service calls fork() and the parent exits
+- **oneshot**: similar to simple, but the process must exit before systemd starts follow-up units
+- **dbus**: the service is considered ready when the specified BusName appears on DBus
+- **notify**: the service will issue a notification when it has finished starting up
+- **idle**: similar to simple, but actual execution is delayed until all active jobs are dispatched
+
+**Reference:** systemd.service(5)

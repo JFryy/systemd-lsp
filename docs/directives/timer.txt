@@ -1,0 +1,15 @@
+OnActiveSec
+OnBootSec
+OnStartupSec
+OnUnitActiveSec
+OnUnitInactiveSec
+OnCalendar
+AccuracySec
+RandomizedDelaySec
+FixedRandomDelay
+OnClockChange
+OnTimezoneChange
+Unit
+Persistent
+WakeSystem
+RemainAfterElapse

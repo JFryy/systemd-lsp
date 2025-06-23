@@ -1,0 +1,1 @@
+Path units are used to activate other services when the file system objects they monitor change or are accessed.

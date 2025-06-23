@@ -1,5 +1,5 @@
-use crate::parser::{SystemdUnit, SystemdSection};
 use crate::constants::SystemdConstants;
+use crate::parser::{SystemdSection, SystemdUnit};
 use dashmap::DashMap;
 use log::{debug, trace};
 use std::collections::HashSet;
@@ -14,8 +14,9 @@ pub struct SystemdDiagnostics {
 
 impl SystemdDiagnostics {
     pub fn new() -> Self {
-        let valid_sections: HashSet<&'static str> = SystemdConstants::valid_sections().iter().cloned().collect();
-        
+        let valid_sections: HashSet<&'static str> =
+            SystemdConstants::valid_sections().iter().cloned().collect();
+
         let section_directives = DashMap::new();
         for (section, directives) in SystemdConstants::section_directives() {
             let directive_set: HashSet<&'static str> = directives.iter().cloned().collect();
@@ -94,10 +95,9 @@ impl SystemdDiagnostics {
         diagnostics: &mut Vec<Diagnostic>,
     ) {
         if section.name == "Service" && directive.key == "ExecStart" && directive.value.is_empty() {
-            diagnostics.push(self.create_value_diagnostic(
-                directive,
-                "ExecStart cannot be empty".to_string(),
-            ));
+            diagnostics.push(
+                self.create_value_diagnostic(directive, "ExecStart cannot be empty".to_string()),
+            );
             return;
         }
 
@@ -108,25 +108,36 @@ impl SystemdDiagnostics {
                 "StandardOutput" | "StandardError" => {
                     values.iter().any(|&v| value == v || value.starts_with(v))
                 }
-                _ => values.contains(&value)
+                _ => values.contains(&value),
             };
 
             if !is_valid {
                 diagnostics.push(self.create_value_diagnostic(
                     directive,
-                    format!("Invalid {} value '{}'. Valid values: {}", 
-                           directive.key, directive.value, values.join(", ")),
+                    format!(
+                        "Invalid {} value '{}'. Valid values: {}",
+                        directive.key,
+                        directive.value,
+                        values.join(", ")
+                    ),
                 ));
             }
         }
     }
 
-    fn create_value_diagnostic(&self, directive: &crate::parser::SystemdDirective, message: String) -> Diagnostic {
+    fn create_value_diagnostic(
+        &self,
+        directive: &crate::parser::SystemdDirective,
+        message: String,
+    ) -> Diagnostic {
         let value_start = directive.column_range.1 + 1; // +1 for the '=' character
         Diagnostic {
             range: Range::new(
                 Position::new(directive.line_number, value_start),
-                Position::new(directive.line_number, value_start + directive.value.len() as u32),
+                Position::new(
+                    directive.line_number,
+                    value_start + directive.value.len() as u32,
+                ),
             ),
             severity: Some(DiagnosticSeverity::ERROR),
             code: None,
@@ -139,3 +150,4 @@ impl SystemdDiagnostics {
         }
     }
 }
+

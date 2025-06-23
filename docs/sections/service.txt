@@ -1,0 +1,1 @@
+The [Service] section contains information about the service and the process it supervises. This section is used for units of Type=service. A number of options that may be used in this section are shared with other unit types. These options are documented in systemd.exec(5), systemd.kill(5) and systemd.resource-control(5).

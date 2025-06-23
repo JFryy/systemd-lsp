@@ -1,0 +1,5 @@
+**Description**
+
+A human readable name for the unit. This is used by systemd and other UIs as a user-visible label for the unit, so you should make this string as informative and descriptive as possible.
+
+**Reference:** systemd.unit(5)

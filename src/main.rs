@@ -8,10 +8,14 @@ mod parser;
 mod diagnostics;
 mod completion;
 mod constants;
+mod formatting;
+mod definition;
 
 use parser::SystemdParser;
 use diagnostics::SystemdDiagnostics;
 use completion::SystemdCompletion;
+use formatting::SystemdFormatter;
+use definition::SystemdDefinitionProvider;
 
 #[derive(Debug)]
 pub struct SystemdLanguageServer {
@@ -19,6 +23,8 @@ pub struct SystemdLanguageServer {
     parser: SystemdParser,
     diagnostics: SystemdDiagnostics,
     completion: SystemdCompletion,
+    formatter: SystemdFormatter,
+    definition_provider: SystemdDefinitionProvider,
 }
 
 #[tower_lsp::async_trait]
@@ -39,6 +45,9 @@ impl LanguageServer for SystemdLanguageServer {
                 completion_item: None,
             }),
             hover_provider: Some(HoverProviderCapability::Simple(true)),
+            document_formatting_provider: Some(OneOf::Left(true)),
+            document_range_formatting_provider: Some(OneOf::Left(true)),
+            definition_provider: Some(OneOf::Left(true)),
             ..ServerCapabilities::default()
         };
         
@@ -62,6 +71,10 @@ impl LanguageServer for SystemdLanguageServer {
 
     async fn shutdown(&self) -> Result<()> {
         info!("LSP server shutdown requested");
+        
+        // Clean up temporary documentation files
+        self.definition_provider.cleanup_temp_files();
+        
         Ok(())
     }
 
@@ -154,6 +167,52 @@ impl LanguageServer for SystemdLanguageServer {
         Ok(result)
     }
 
+    async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
+        let uri = &params.text_document.uri;
+        debug!("Formatting request for {}", uri);
+        
+        if let Some(document_text) = self.parser.get_document_text(uri) {
+            let edits = self.formatter.format_document(uri, &document_text);
+            debug!("Generated {} formatting edits", edits.len());
+            Ok(Some(edits))
+        } else {
+            debug!("Document not found for formatting: {}", uri);
+            Ok(None)
+        }
+    }
+
+    async fn range_formatting(&self, params: DocumentRangeFormattingParams) -> Result<Option<Vec<TextEdit>>> {
+        let uri = &params.text_document.uri;
+        let range = &params.range;
+        debug!("Range formatting request for {} at {:?}", uri, range);
+        
+        if let Some(document_text) = self.parser.get_document_text(uri) {
+            let edits = self.formatter.format_range(uri, &document_text, *range);
+            debug!("Generated {} range formatting edits", edits.len());
+            Ok(Some(edits))
+        } else {
+            debug!("Document not found for range formatting: {}", uri);
+            Ok(None)
+        }
+    }
+
+    async fn goto_definition(&self, params: GotoDefinitionParams) -> Result<Option<GotoDefinitionResponse>> {
+        let uri = &params.text_document_position_params.text_document.uri;
+        let position = &params.text_document_position_params.position;
+        
+        debug!("Go to definition request at {}:{} in {}", position.line, position.character, uri);
+        
+        let result = self.definition_provider.get_definition(&self.parser, uri, position).await;
+        
+        if result.is_some() {
+            debug!("Definition found and returned");
+        } else {
+            debug!("No definition found for this position");
+        }
+        
+        Ok(result)
+    }
+
 }
 
 impl SystemdLanguageServer {
@@ -164,6 +223,8 @@ impl SystemdLanguageServer {
             parser: SystemdParser::new(),
             diagnostics: SystemdDiagnostics::new(),
             completion: SystemdCompletion::new(),
+            formatter: SystemdFormatter::new(),
+            definition_provider: SystemdDefinitionProvider::new(),
         }
     }
 
@@ -191,6 +252,19 @@ impl SystemdLanguageServer {
         
         // Check if hovering over a section header specifically
         if let Some(section_name) = self.parser.get_section_header_at_position(&parsed, position) {
+            // Use the full embedded documentation for section headers
+            let section_key = section_name.to_lowercase();
+            if let Some(full_docs) = self.definition_provider.get_embedded_documentation(&section_key) {
+                return Some(Hover {
+                    contents: HoverContents::Markup(MarkupContent {
+                        kind: MarkupKind::Markdown,
+                        value: full_docs,
+                    }),
+                    range: None,
+                });
+            }
+            
+            // Fallback to short documentation if embedded docs not available
             let section_docs = self.get_section_documentation(&section_name);
             if let Some(docs) = section_docs {
                 return Some(Hover {

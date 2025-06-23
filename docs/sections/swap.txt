@@ -1,0 +1,1 @@
+Swap units encapsulate memory swap partitions or files of the operating system.

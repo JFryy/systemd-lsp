@@ -1,0 +1,1 @@
+Timer units are used to trigger activation of other units based on timers. They can be triggered by elapsed time, boot time, startup time, or calendar events.
