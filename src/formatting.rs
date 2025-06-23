@@ -191,4 +191,3 @@ mod tests {
         assert_eq!(formatted, expected);
     }
 }
-

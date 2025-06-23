@@ -503,4 +503,3 @@ mod tests {
         assert!(parsed.sections["service"].directives.contains_key("type"));
     }
 }
-

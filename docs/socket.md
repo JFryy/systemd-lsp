@@ -1,6 +1,8 @@
 # [Socket] Section
 
-The `[Socket]` section contains socket-specific settings. Socket units are used to implement on-demand starting of services, socket-based activation, and systemd's socket-based activation and socket passing features.
+The `[Socket]` section encodes information about an IPC or network socket or FIFO controlled and supervised by systemd, for socket-based activation. Socket units are used to implement on-demand starting of services and socket-based activation.
+
+*Based on [systemd.socket(5)](https://www.freedesktop.org/software/systemd/man/systemd.socket.html) official documentation.*
 
 ## Socket Types
 
@@ -287,11 +289,11 @@ nc -U /run/my-service.sock
 
 ## See Also
 
-- systemd.socket(5)
-- systemd.exec(5)
-- systemctl(1)
-- systemd(1)
-- socket(7)
-- unix(7)
-- tcp(7)
-- udp(7)
+- [systemd.socket(5)](https://www.freedesktop.org/software/systemd/man/systemd.socket.html) - Socket unit configuration
+- [systemd.exec(5)](https://www.freedesktop.org/software/systemd/man/systemd.exec.html) - Execution environment configuration
+- [systemctl(1)](https://www.freedesktop.org/software/systemd/man/systemctl.html) - Control systemd services and units
+- [systemd(1)](https://www.freedesktop.org/software/systemd/man/systemd.html) - systemd system and service manager
+- [socket(7)](https://man7.org/linux/man-pages/man7/socket.7.html) - Linux socket interface
+- [unix(7)](https://man7.org/linux/man-pages/man7/unix.7.html) - Unix domain sockets
+- [tcp(7)](https://man7.org/linux/man-pages/man7/tcp.7.html) - TCP protocol
+- [udp(7)](https://man7.org/linux/man-pages/man7/udp.7.html) - UDP protocol

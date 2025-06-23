@@ -151,3 +151,170 @@ impl SystemdDiagnostics {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parser::{SystemdDirective, SystemdSection};
+    use std::collections::HashMap;
+    use tower_lsp::lsp_types::{DiagnosticSeverity, Url};
+
+    fn create_test_unit(sections: Vec<(&str, Vec<(&str, &str)>)>) -> SystemdUnit {
+        let mut unit_sections = HashMap::new();
+        
+        for (i, (section_name, directives)) in sections.iter().enumerate() {
+            let mut section_directives = HashMap::new();
+            
+            for (j, (key, value)) in directives.iter().enumerate() {
+                section_directives.insert(
+                    key.to_string(),
+                    SystemdDirective {
+                        key: key.to_string(),
+                        value: value.to_string(),
+                        line_number: (i * 10 + j + 1) as u32,
+                        column_range: (0, key.len() as u32),
+                    },
+                );
+            }
+            
+            unit_sections.insert(
+                section_name.to_string(),
+                SystemdSection {
+                    name: section_name.to_string(),
+                    directives: section_directives,
+                    line_range: (i as u32, (i + 1) as u32),
+                },
+            );
+        }
+        
+        SystemdUnit {
+            sections: unit_sections,
+            raw_text: String::new(),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_valid_unit_no_diagnostics() {
+        let diagnostics = SystemdDiagnostics::new();
+        let uri = Url::parse("file:///test.service").unwrap();
+        
+        let unit = create_test_unit(vec![
+            ("Unit", vec![("Description", "Test service")]),
+            ("Service", vec![("Type", "simple"), ("ExecStart", "/bin/test")]),
+            ("Install", vec![("WantedBy", "multi-user.target")]),
+        ]);
+        
+        diagnostics.update(&uri, unit).await;
+        let result = diagnostics.get_diagnostics(&uri).await;
+        
+        assert_eq!(result.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_invalid_section_diagnostic() {
+        let diagnostics = SystemdDiagnostics::new();
+        let uri = Url::parse("file:///test.service").unwrap();
+        
+        let unit = create_test_unit(vec![
+            ("InvalidSection", vec![("SomeKey", "SomeValue")]),
+        ]);
+        
+        diagnostics.update(&uri, unit).await;
+        let result = diagnostics.get_diagnostics(&uri).await;
+        
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].message, "Unknown section: [InvalidSection]");
+        assert_eq!(result[0].range.start.line, 0);
+    }
+
+    #[tokio::test]
+    async fn test_invalid_directive_diagnostic() {
+        let diagnostics = SystemdDiagnostics::new();
+        let uri = Url::parse("file:///test.service").unwrap();
+        
+        let unit = create_test_unit(vec![
+            ("Unit", vec![("InvalidDirective", "SomeValue")]),
+        ]);
+        
+        diagnostics.update(&uri, unit).await;
+        let result = diagnostics.get_diagnostics(&uri).await;
+        
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].message, "Unknown directive 'InvalidDirective' in [Unit] section");
+        assert_eq!(result[0].severity, Some(DiagnosticSeverity::WARNING));
+    }
+
+    #[tokio::test]
+    async fn test_empty_execstart_diagnostic() {
+        let diagnostics = SystemdDiagnostics::new();
+        let uri = Url::parse("file:///test.service").unwrap();
+        
+        let unit = create_test_unit(vec![
+            ("Service", vec![("ExecStart", "")]),
+        ]);
+        
+        diagnostics.update(&uri, unit).await;
+        let result = diagnostics.get_diagnostics(&uri).await;
+        
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].message, "ExecStart cannot be empty");
+        assert_eq!(result[0].severity, Some(DiagnosticSeverity::ERROR));
+    }
+
+    #[tokio::test]
+    async fn test_invalid_type_value_diagnostic() {
+        let diagnostics = SystemdDiagnostics::new();
+        let uri = Url::parse("file:///test.service").unwrap();
+        
+        let unit = create_test_unit(vec![
+            ("Service", vec![("Type", "invalid_type")]),
+        ]);
+        
+        diagnostics.update(&uri, unit).await;
+        let result = diagnostics.get_diagnostics(&uri).await;
+        
+        assert_eq!(result.len(), 1);
+        assert!(result[0].message.starts_with("Invalid Type value 'invalid_type'"));
+        assert_eq!(result[0].severity, Some(DiagnosticSeverity::ERROR));
+    }
+
+    #[tokio::test]
+    async fn test_multiple_diagnostics() {
+        let diagnostics = SystemdDiagnostics::new();
+        let uri = Url::parse("file:///test.service").unwrap();
+        
+        let unit = create_test_unit(vec![
+            ("InvalidSection", vec![("SomeKey", "SomeValue")]),
+            ("Unit", vec![("InvalidDirective", "SomeValue")]),
+            ("Service", vec![("ExecStart", ""), ("Type", "invalid_type")]),
+        ]);
+        
+        diagnostics.update(&uri, unit).await;
+        let result = diagnostics.get_diagnostics(&uri).await;
+        
+        assert!(result.len() >= 3);
+    }
+
+    #[tokio::test]
+    async fn test_diagnostics_persistence() {
+        let diagnostics = SystemdDiagnostics::new();
+        let uri1 = Url::parse("file:///test1.service").unwrap();
+        let uri2 = Url::parse("file:///test2.service").unwrap();
+        
+        let unit1 = create_test_unit(vec![
+            ("InvalidSection", vec![("SomeKey", "SomeValue")]),
+        ]);
+        let unit2 = create_test_unit(vec![
+            ("Unit", vec![("Description", "Valid service")]),
+        ]);
+        
+        diagnostics.update(&uri1, unit1).await;
+        diagnostics.update(&uri2, unit2).await;
+        
+        let result1 = diagnostics.get_diagnostics(&uri1).await;
+        let result2 = diagnostics.get_diagnostics(&uri2).await;
+        
+        assert_eq!(result1.len(), 1);
+        assert_eq!(result2.len(), 0);
+    }
+}
+

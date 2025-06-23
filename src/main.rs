@@ -1,21 +1,21 @@
+use log::{debug, info, trace};
+use std::env;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
-use log::{info, debug, trace};
-use std::env;
 
-mod parser;
-mod diagnostics;
 mod completion;
 mod constants;
-mod formatting;
 mod definition;
+mod diagnostics;
+mod formatting;
+mod parser;
 
-use parser::SystemdParser;
-use diagnostics::SystemdDiagnostics;
 use completion::SystemdCompletion;
-use formatting::SystemdFormatter;
 use definition::SystemdDefinitionProvider;
+use diagnostics::SystemdDiagnostics;
+use formatting::SystemdFormatter;
+use parser::SystemdParser;
 
 #[derive(Debug)]
 pub struct SystemdLanguageServer {
@@ -32,11 +32,9 @@ impl LanguageServer for SystemdLanguageServer {
     async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
         info!("LSP initialize request received");
         debug!("Client capabilities: {:?}", params.capabilities);
-        
+
         let capabilities = ServerCapabilities {
-            text_document_sync: Some(TextDocumentSyncCapability::Kind(
-                TextDocumentSyncKind::FULL,
-            )),
+            text_document_sync: Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::FULL)),
             completion_provider: Some(CompletionOptions {
                 resolve_provider: Some(false),
                 trigger_characters: Some(vec!["=".to_string(), "[".to_string()]),
@@ -50,12 +48,12 @@ impl LanguageServer for SystemdLanguageServer {
             definition_provider: Some(OneOf::Left(true)),
             ..ServerCapabilities::default()
         };
-        
+
         info!("Server capabilities configured");
         debug!("Completion trigger characters: [=, []");
         debug!("Text document sync: FULL");
         debug!("Hover provider: enabled");
-        
+
         Ok(InitializeResult {
             capabilities,
             ..Default::default()
@@ -71,10 +69,10 @@ impl LanguageServer for SystemdLanguageServer {
 
     async fn shutdown(&self) -> Result<()> {
         info!("LSP server shutdown requested");
-        
+
         // Clean up temporary documentation files
         self.definition_provider.cleanup_temp_files();
-        
+
         Ok(())
     }
 
@@ -83,7 +81,7 @@ impl LanguageServer for SystemdLanguageServer {
         info!("Document opened: {}", uri);
         debug!("Document language: {}", params.text_document.language_id);
         debug!("Document version: {}", params.text_document.version);
-        
+
         self.client
             .log_message(MessageType::INFO, "file opened!")
             .await;
@@ -98,9 +96,12 @@ impl LanguageServer for SystemdLanguageServer {
 
     async fn did_change(&self, mut params: DidChangeTextDocumentParams) {
         let uri = &params.text_document.uri;
-        debug!("Document changed: {} (version {})", uri, params.text_document.version);
+        debug!(
+            "Document changed: {} (version {})",
+            uri, params.text_document.version
+        );
         trace!("Content changes: {} items", params.content_changes.len());
-        
+
         self.on_change(TextDocumentItem {
             uri: params.text_document.uri,
             text: std::mem::take(&mut params.content_changes[0].text),
@@ -127,15 +128,18 @@ impl LanguageServer for SystemdLanguageServer {
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
         let uri = &params.text_document_position.text_document.uri;
         let position = &params.text_document_position.position;
-        
-        debug!("Completion request at {}:{} in {}", position.line, position.character, uri);
-        
+
+        debug!(
+            "Completion request at {}:{} in {}",
+            position.line, position.character, uri
+        );
+
         let result = self.completion.get_completions(uri, position).await;
         let count = result.as_ref().map_or(0, |r| match r {
             CompletionResponse::Array(items) => items.len(),
             CompletionResponse::List(list) => list.items.len(),
         });
-        
+
         debug!("Returning {} completion items", count);
         Ok(result)
     }
@@ -143,15 +147,24 @@ impl LanguageServer for SystemdLanguageServer {
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
         let uri = &params.text_document_position_params.text_document.uri;
         let position = &params.text_document_position_params.position;
-        
-        debug!("Hover request at {}:{} in {}", position.line, position.character, uri);
-        
+
+        debug!(
+            "Hover request at {}:{} in {}",
+            position.line, position.character, uri
+        );
+
         self.client
-            .log_message(MessageType::INFO, format!("Hover requested at {}:{}", position.line, position.character))
+            .log_message(
+                MessageType::INFO,
+                format!(
+                    "Hover requested at {}:{}",
+                    position.line, position.character
+                ),
+            )
             .await;
-        
+
         let result = self.get_hover_info(uri, position).await;
-        
+
         if result.is_some() {
             debug!("Hover info found and returned");
             self.client
@@ -163,14 +176,14 @@ impl LanguageServer for SystemdLanguageServer {
                 .log_message(MessageType::INFO, "No hover info found")
                 .await;
         }
-        
+
         Ok(result)
     }
 
     async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
         let uri = &params.text_document.uri;
         debug!("Formatting request for {}", uri);
-        
+
         if let Some(document_text) = self.parser.get_document_text(uri) {
             let edits = self.formatter.format_document(uri, &document_text);
             debug!("Generated {} formatting edits", edits.len());
@@ -181,11 +194,14 @@ impl LanguageServer for SystemdLanguageServer {
         }
     }
 
-    async fn range_formatting(&self, params: DocumentRangeFormattingParams) -> Result<Option<Vec<TextEdit>>> {
+    async fn range_formatting(
+        &self,
+        params: DocumentRangeFormattingParams,
+    ) -> Result<Option<Vec<TextEdit>>> {
         let uri = &params.text_document.uri;
         let range = &params.range;
         debug!("Range formatting request for {} at {:?}", uri, range);
-        
+
         if let Some(document_text) = self.parser.get_document_text(uri) {
             let edits = self.formatter.format_range(uri, &document_text, *range);
             debug!("Generated {} range formatting edits", edits.len());
@@ -196,23 +212,31 @@ impl LanguageServer for SystemdLanguageServer {
         }
     }
 
-    async fn goto_definition(&self, params: GotoDefinitionParams) -> Result<Option<GotoDefinitionResponse>> {
+    async fn goto_definition(
+        &self,
+        params: GotoDefinitionParams,
+    ) -> Result<Option<GotoDefinitionResponse>> {
         let uri = &params.text_document_position_params.text_document.uri;
         let position = &params.text_document_position_params.position;
-        
-        debug!("Go to definition request at {}:{} in {}", position.line, position.character, uri);
-        
-        let result = self.definition_provider.get_definition(&self.parser, uri, position).await;
-        
+
+        debug!(
+            "Go to definition request at {}:{} in {}",
+            position.line, position.character, uri
+        );
+
+        let result = self
+            .definition_provider
+            .get_definition(&self.parser, uri, position)
+            .await;
+
         if result.is_some() {
             debug!("Definition found and returned");
         } else {
             debug!("No definition found for this position");
         }
-        
+
         Ok(result)
     }
-
 }
 
 impl SystemdLanguageServer {
@@ -231,30 +255,45 @@ impl SystemdLanguageServer {
     async fn on_change(&self, params: TextDocumentItem) {
         debug!("Processing document change for {}", params.uri);
         trace!("Document text length: {} characters", params.text.len());
-        
+
         let parsed = self.parser.parse(&params.text);
         debug!("Document parsed, found {} sections", parsed.sections.len());
-        
+
         self.parser.update_document(&params.uri, &params.text);
         self.diagnostics.update(&params.uri, parsed).await;
-        
+
         let diagnostics = self.diagnostics.get_diagnostics(&params.uri).await;
-        debug!("Publishing {} diagnostics for {}", diagnostics.len(), params.uri);
-        
+        debug!(
+            "Publishing {} diagnostics for {}",
+            diagnostics.len(),
+            params.uri
+        );
+
         self.client
             .publish_diagnostics(params.uri.clone(), diagnostics, Some(params.version))
             .await;
     }
 
     async fn get_hover_info(&self, uri: &Url, position: &Position) -> Option<Hover> {
-        trace!("Getting hover info for {}:{} in {}", position.line, position.character, uri);
+        trace!(
+            "Getting hover info for {}:{} in {}",
+            position.line,
+            position.character,
+            uri
+        );
         let parsed = self.parser.get_parsed_document(uri)?;
-        
+
         // Check if hovering over a section header specifically
-        if let Some(section_name) = self.parser.get_section_header_at_position(&parsed, position) {
+        if let Some(section_name) = self
+            .parser
+            .get_section_header_at_position(&parsed, position)
+        {
             // Use the full embedded documentation for section headers
             let section_key = section_name.to_lowercase();
-            if let Some(full_docs) = self.definition_provider.get_embedded_documentation(&section_key) {
+            if let Some(full_docs) = self
+                .definition_provider
+                .get_embedded_documentation(&section_key)
+            {
                 return Some(Hover {
                     contents: HoverContents::Markup(MarkupContent {
                         kind: MarkupKind::Markdown,
@@ -263,7 +302,7 @@ impl SystemdLanguageServer {
                     range: None,
                 });
             }
-            
+
             // Fallback to short documentation if embedded docs not available
             let section_docs = self.get_section_documentation(&section_name);
             if let Some(docs) = section_docs {
@@ -276,11 +315,12 @@ impl SystemdLanguageServer {
                 });
             }
         }
-        
+
         // Check if hovering over a directive
         if let Some(directive_name) = self.parser.get_word_at_position(&parsed, position) {
             let current_section = self.parser.get_section_at_line(&parsed, position.line)?;
-            let directive_docs = self.get_directive_documentation(&directive_name, &current_section.name);
+            let directive_docs =
+                self.get_directive_documentation(&directive_name, &current_section.name);
             if let Some(docs) = directive_docs {
                 return Some(Hover {
                     contents: HoverContents::Markup(MarkupContent {
@@ -291,7 +331,7 @@ impl SystemdLanguageServer {
                 });
             }
         }
-        
+
         // Fallback - provide generic help if hovering over any recognized line
         if let Some(section) = self.parser.get_section_at_line(&parsed, position.line) {
             return Some(Hover {
@@ -302,22 +342,27 @@ impl SystemdLanguageServer {
                 range: None,
             });
         }
-        
+
         None
     }
-    
+
     fn get_section_documentation(&self, section_name: &str) -> Option<String> {
         self.completion.get_section_documentation(section_name)
     }
-    
-    fn get_directive_documentation(&self, directive_name: &str, section_name: &str) -> Option<String> {
-        self.completion.get_directive_documentation(directive_name, section_name)
+
+    fn get_directive_documentation(
+        &self,
+        directive_name: &str,
+        section_name: &str,
+    ) -> Option<String> {
+        self.completion
+            .get_directive_documentation(directive_name, section_name)
     }
 }
 
 fn setup_logging() {
     let is_tty = atty::is(atty::Stream::Stdin) || atty::is(atty::Stream::Stdout);
-    
+
     if is_tty {
         // Running in terminal mode - set up console logging
         let mut builder = env_logger::Builder::from_default_env();
@@ -325,14 +370,13 @@ fn setup_logging() {
             .filter_level(log::LevelFilter::Info)
             .format_timestamp_secs()
             .init();
-        
+
         info!("systemdls running in terminal mode");
         info!("Use --help for usage information");
     } else {
         // Running as LSP server - log to file or stderr
-        let log_level = env::var("SYSTEMDLS_LOG_LEVEL")
-            .unwrap_or_else(|_| "info".to_string());
-        
+        let log_level = env::var("SYSTEMDLS_LOG_LEVEL").unwrap_or_else(|_| "info".to_string());
+
         let level_filter = match log_level.to_lowercase().as_str() {
             "error" => log::LevelFilter::Error,
             "warn" => log::LevelFilter::Warn,
@@ -341,7 +385,7 @@ fn setup_logging() {
             "trace" => log::LevelFilter::Trace,
             _ => log::LevelFilter::Info,
         };
-        
+
         debug!("Environment log level setting: {}", log_level);
 
         let mut builder = env_logger::Builder::new();
@@ -350,7 +394,7 @@ fn setup_logging() {
             .format_timestamp_millis()
             .target(env_logger::Target::Stderr)
             .init();
-        
+
         info!("systemdls starting as LSP server");
         info!("Log level: {}", level_filter);
     }
@@ -359,9 +403,9 @@ fn setup_logging() {
 #[tokio::main]
 async fn main() {
     setup_logging();
-    
+
     let is_tty = atty::is(atty::Stream::Stdin) || atty::is(atty::Stream::Stdout);
-    
+
     if is_tty {
         // Terminal mode - show help and exit
         println!("systemdls - Language Server for systemd unit files");
@@ -380,7 +424,7 @@ async fn main() {
     }
 
     info!("Initializing systemd language server components");
-    
+
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
 
@@ -389,7 +433,8 @@ async fn main() {
         info!("Creating new SystemdLanguageServer instance");
         SystemdLanguageServer::new(client)
     });
-    
+
     info!("Starting LSP server");
     Server::new(stdin, stdout, socket).serve(service).await;
 }
+

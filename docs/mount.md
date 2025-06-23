@@ -1,6 +1,8 @@
 # [Mount] Section
 
-The `[Mount]` section contains mount-specific settings. Mount units are used to control mount points in the system. Mount units must be named after the mount point directories they control. For example, the mount point /home/lennart must be configured in the unit file home-lennart.mount.
+The `[Mount]` section encodes information about a file system mount point controlled and supervised by systemd. Mount units must be named after the mount point directories they control. For example, the mount point `/home/lennart` must be configured in the unit file `home-lennart.mount`.
+
+*Based on [systemd.mount(5)](https://www.freedesktop.org/software/systemd/man/systemd.mount.html) official documentation.*
 
 ## Required Directives
 
@@ -285,9 +287,9 @@ mount -t type what where
 
 ## See Also
 
-- systemd.mount(5)
-- mount(8)
-- fstab(5)
-- systemctl(1)
-- systemd(1)
-- findmnt(8)
+- [systemd.mount(5)](https://www.freedesktop.org/software/systemd/man/systemd.mount.html) - Mount unit configuration
+- [mount(8)](https://man7.org/linux/man-pages/man8/mount.8.html) - Mount filesystems
+- [fstab(5)](https://man7.org/linux/man-pages/man5/fstab.5.html) - Static information about filesystems
+- [systemctl(1)](https://www.freedesktop.org/software/systemd/man/systemctl.html) - Control systemd services and units
+- [systemd(1)](https://www.freedesktop.org/software/systemd/man/systemd.html) - systemd system and service manager
+- [findmnt(8)](https://man7.org/linux/man-pages/man8/findmnt.8.html) - Find mounted filesystems

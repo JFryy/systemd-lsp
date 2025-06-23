@@ -186,3 +186,193 @@ impl SystemdConstants {
     pub const APP_NAME: &'static str = "systemdls";
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_valid_sections_not_empty() {
+        let sections = SystemdConstants::valid_sections();
+        assert!(!sections.is_empty());
+
+        // Check that common sections are present
+        assert!(sections.contains(&"Unit"));
+        assert!(sections.contains(&"Service"));
+        assert!(sections.contains(&"Install"));
+    }
+
+    #[test]
+    fn test_section_directives_contains_expected_sections() {
+        let directives = SystemdConstants::section_directives();
+
+        // Check that main sections are present
+        assert!(directives.contains_key("Unit"));
+        assert!(directives.contains_key("Service"));
+        assert!(directives.contains_key("Install"));
+        assert!(directives.contains_key("Timer"));
+        assert!(directives.contains_key("Socket"));
+        assert!(directives.contains_key("Mount"));
+        assert!(directives.contains_key("Path"));
+        assert!(directives.contains_key("Swap"));
+        assert!(directives.contains_key("Target"));
+    }
+
+    #[test]
+    fn test_section_directives_contain_valid_directives() {
+        let directives = SystemdConstants::section_directives();
+
+        // Test Unit section directives
+        let unit_directives = directives.get("Unit").unwrap();
+        assert!(!unit_directives.is_empty());
+        assert!(unit_directives.contains(&"Description"));
+
+        // Test Service section directives
+        let service_directives = directives.get("Service").unwrap();
+        assert!(!service_directives.is_empty());
+        assert!(service_directives.contains(&"Type"));
+        assert!(service_directives.contains(&"ExecStart"));
+
+        // Test Install section directives
+        let install_directives = directives.get("Install").unwrap();
+        assert!(!install_directives.is_empty());
+        assert!(install_directives.contains(&"WantedBy"));
+    }
+
+    #[test]
+    fn test_directive_descriptions_contain_expected_entries() {
+        let descriptions = SystemdConstants::directive_descriptions();
+
+        // Test that key directive descriptions exist
+        assert!(descriptions.contains_key(&("Unit", "Description")));
+        assert!(descriptions.contains_key(&("Unit", "Wants")));
+        assert!(descriptions.contains_key(&("Service", "Type")));
+        assert!(descriptions.contains_key(&("Service", "ExecStart")));
+        assert!(descriptions.contains_key(&("Install", "WantedBy")));
+
+        // Test that descriptions are not empty
+        assert!(!descriptions[&("Unit", "Description")].is_empty());
+        assert!(!descriptions[&("Service", "Type")].is_empty());
+    }
+
+    #[test]
+    fn test_valid_values_for_type_directive() {
+        let valid_values = SystemdConstants::valid_values();
+
+        let type_values = valid_values.get("Type").unwrap();
+        assert!(type_values.contains(&"simple"));
+        assert!(type_values.contains(&"exec"));
+        assert!(type_values.contains(&"forking"));
+        assert!(type_values.contains(&"oneshot"));
+        assert!(type_values.contains(&"dbus"));
+        assert!(type_values.contains(&"notify"));
+        assert!(type_values.contains(&"idle"));
+    }
+
+    #[test]
+    fn test_valid_values_for_restart_directive() {
+        let valid_values = SystemdConstants::valid_values();
+
+        let restart_values = valid_values.get("Restart").unwrap();
+        assert!(restart_values.contains(&"no"));
+        assert!(restart_values.contains(&"on-success"));
+        assert!(restart_values.contains(&"on-failure"));
+        assert!(restart_values.contains(&"always"));
+    }
+
+    #[test]
+    fn test_valid_values_for_boolean_directives() {
+        let valid_values = SystemdConstants::valid_values();
+
+        let boolean_directives = [
+            "NoNewPrivileges",
+            "PrivateTmp",
+            "PrivateDevices",
+            "PrivateNetwork",
+            "DynamicUser",
+        ];
+
+        for directive in &boolean_directives {
+            let values = valid_values.get(directive).unwrap();
+            assert!(values.contains(&"true"));
+            assert!(values.contains(&"false"));
+            assert!(values.contains(&"yes"));
+            assert!(values.contains(&"no"));
+            assert!(values.contains(&"1"));
+            assert!(values.contains(&"0"));
+        }
+    }
+
+    #[test]
+    fn test_valid_values_for_standard_io() {
+        let valid_values = SystemdConstants::valid_values();
+
+        let standard_output = valid_values.get("StandardOutput").unwrap();
+        assert!(standard_output.contains(&"inherit"));
+        assert!(standard_output.contains(&"null"));
+        assert!(standard_output.contains(&"journal"));
+        assert!(standard_output.contains(&"file:"));
+
+        let standard_error = valid_values.get("StandardError").unwrap();
+        assert!(standard_error.contains(&"inherit"));
+        assert!(standard_error.contains(&"null"));
+        assert!(standard_error.contains(&"journal"));
+    }
+
+    #[test]
+    fn test_section_documentation_not_empty() {
+        let docs = SystemdConstants::section_documentation();
+
+        // Check that main sections have documentation
+        assert!(docs.contains_key("Unit"));
+        assert!(docs.contains_key("Service"));
+        assert!(docs.contains_key("Install"));
+
+        // Check that documentation is not empty
+        assert!(!docs["Unit"].is_empty());
+        assert!(!docs["Service"].is_empty());
+        assert!(!docs["Install"].is_empty());
+    }
+
+    #[test]
+    fn test_app_name_constant() {
+        assert_eq!(SystemdConstants::APP_NAME, "systemdls");
+    }
+
+    #[test]
+    fn test_target_section_filters_comments() {
+        let directives = SystemdConstants::section_directives();
+        let target_directives = directives.get("Target").unwrap();
+
+        // Ensure no lines that start with # are included
+        for directive in target_directives {
+            assert!(!directive.starts_with('#'));
+            assert!(!directive.trim().is_empty());
+        }
+    }
+
+    #[test]
+    fn test_protect_system_values() {
+        let valid_values = SystemdConstants::valid_values();
+        let protect_system = valid_values.get("ProtectSystem").unwrap();
+
+        assert!(protect_system.contains(&"true"));
+        assert!(protect_system.contains(&"false"));
+        assert!(protect_system.contains(&"strict"));
+        assert!(protect_system.contains(&"full"));
+        assert!(protect_system.contains(&"yes"));
+        assert!(protect_system.contains(&"no"));
+    }
+
+    #[test]
+    fn test_protect_home_values() {
+        let valid_values = SystemdConstants::valid_values();
+        let protect_home = valid_values.get("ProtectHome").unwrap();
+
+        assert!(protect_home.contains(&"true"));
+        assert!(protect_home.contains(&"false"));
+        assert!(protect_home.contains(&"read-only"));
+        assert!(protect_home.contains(&"tmpfs"));
+        assert!(protect_home.contains(&"yes"));
+        assert!(protect_home.contains(&"no"));
+    }
+}

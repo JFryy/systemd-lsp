@@ -1,6 +1,8 @@
 # [Timer] Section
 
-The `[Timer]` section contains timer-specific settings. Timer units are used to schedule activation of other units at specified times or intervals. This is systemd's equivalent to cron jobs but with better integration with the service management system.
+The `[Timer]` section encodes information about a timer controlled and supervised by systemd, for timer-based activation. Timer units are used to schedule activation of other units at specified times or intervals based on monotonic or realtime timers.
+
+*Based on [systemd.timer(5)](https://www.freedesktop.org/software/systemd/man/systemd.timer.html) official documentation.*
 
 ## Timer Types
 
@@ -191,8 +193,8 @@ systemctl enable my-timer.timer
 
 ## See Also
 
-- systemd.timer(5)
-- systemd.time(7)
-- systemctl(1)
-- systemd(1)
-- crontab(5)
+- [systemd.timer(5)](https://www.freedesktop.org/software/systemd/man/systemd.timer.html) - Timer unit configuration
+- [systemd.time(7)](https://www.freedesktop.org/software/systemd/man/systemd.time.html) - Time and date specifications
+- [systemctl(1)](https://www.freedesktop.org/software/systemd/man/systemctl.html) - Control systemd services and units
+- [systemd(1)](https://www.freedesktop.org/software/systemd/man/systemd.html) - systemd system and service manager
+- [crontab(5)](https://man7.org/linux/man-pages/man5/crontab.5.html) - Tables for driving cron

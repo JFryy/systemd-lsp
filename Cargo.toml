@@ -1,19 +1,19 @@
 [package]
-name = "systemdls"
+name = "systemd-lsp"
 version = "0.1.0"
 edition = "2021"
 authors = ["James Fotherby <fotherby1@gmail.com>"]
 description = "Language Server Protocol implementation for systemd unit files"
 license = "MIT"
-repository = "https://github.com/jfryy/systemdls"
-homepage = "https://github.com/jfryy/systemdls"
-documentation = "https://github.com/jfryy/systemdls"
+repository = "https://github.com/jfryy/systemd-lsp"
+homepage = "https://github.com/jfryy/systemd-lsp"
+documentation = "https://github.com/jfryy/systemd-lsp"
 keywords = ["systemd", "lsp", "language-server", "linux", "unit-files"]
 categories = ["development-tools", "text-editors"]
 readme = "README.md"
 
 [[bin]]
-name = "systemdls"
+name = "systemd-lsp"
 path = "src/main.rs"
 
 [dependencies]

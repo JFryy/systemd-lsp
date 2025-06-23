@@ -199,3 +199,164 @@ impl SystemdCompletion {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tower_lsp::lsp_types::{Position, Url};
+
+    #[tokio::test]
+    async fn test_completion_creation() {
+        let completion = SystemdCompletion::new();
+
+        // Test that sections are populated
+        assert!(!completion.section_completions.is_empty());
+
+        // Test that directive completions exist for main sections
+        assert!(completion.directive_completions.contains_key("Unit"));
+        assert!(completion.directive_completions.contains_key("Service"));
+        assert!(completion.directive_completions.contains_key("Install"));
+    }
+
+    #[tokio::test]
+    async fn test_get_completions_returns_results() {
+        let completion = SystemdCompletion::new();
+        let uri = Url::parse("file:///test.service").unwrap();
+        let position = Position::new(0, 0);
+
+        let result = completion.get_completions(&uri, &position).await;
+
+        assert!(result.is_some());
+        if let Some(CompletionResponse::Array(items)) = result {
+            assert!(!items.is_empty());
+
+            // Should contain section completions
+            assert!(items.iter().any(|item| item.label == "[Unit]"));
+            assert!(items.iter().any(|item| item.label == "[Service]"));
+            assert!(items.iter().any(|item| item.label == "[Install]"));
+
+            // Should contain common directives
+            assert!(items.iter().any(|item| item.label == "Description"));
+            assert!(items.iter().any(|item| item.label == "Type"));
+            assert!(items.iter().any(|item| item.label == "ExecStart"));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_completion_item_properties() {
+        let completion = SystemdCompletion::new();
+        let uri = Url::parse("file:///test.service").unwrap();
+        let position = Position::new(0, 0);
+
+        let result = completion.get_completions(&uri, &position).await;
+
+        if let Some(CompletionResponse::Array(items)) = result {
+            // Find a section completion
+            let section_item = items.iter().find(|item| item.label == "[Unit]").unwrap();
+            assert_eq!(section_item.kind, Some(CompletionItemKind::MODULE));
+            assert!(section_item.detail.is_some());
+            assert!(section_item.documentation.is_some());
+
+            // Find a directive completion
+            let directive_item = items
+                .iter()
+                .find(|item| item.label == "Description")
+                .unwrap();
+            assert_eq!(directive_item.kind, Some(CompletionItemKind::PROPERTY));
+            assert!(directive_item.insert_text.is_some());
+            assert_eq!(directive_item.insert_text.as_ref().unwrap(), "Description=");
+        }
+    }
+
+    #[test]
+    fn test_create_documentation() {
+        let doc = SystemdCompletion::create_documentation(
+            "Test Title",
+            "Test description",
+            "test.reference",
+        );
+
+        if let Documentation::MarkupContent(content) = doc {
+            assert_eq!(content.kind, MarkupKind::Markdown);
+            assert!(content.value.contains("**Test Title**"));
+            assert!(content.value.contains("Test description"));
+            assert!(content.value.contains("test.reference"));
+        } else {
+            panic!("Expected MarkupContent documentation");
+        }
+    }
+
+    #[test]
+    fn test_create_directive_completion() {
+        let completion =
+            SystemdCompletion::create_directive_completion("TestKey", "Test description");
+
+        assert_eq!(completion.label, "TestKey");
+        assert_eq!(completion.kind, Some(CompletionItemKind::PROPERTY));
+        assert_eq!(completion.detail, Some("systemd directive".to_string()));
+        assert_eq!(completion.insert_text, Some("TestKey=".to_string()));
+        assert!(completion.documentation.is_some());
+    }
+
+    #[test]
+    fn test_get_section_documentation() {
+        let completion = SystemdCompletion::new();
+
+        let doc = completion.get_section_documentation("Unit");
+        assert!(doc.is_some());
+
+        let doc_content = doc.unwrap();
+        assert!(doc_content.contains("**[Unit] Section**"));
+        assert!(doc_content.contains("**Reference:** systemd.unit.5"));
+
+        // Test non-existent section
+        let no_doc = completion.get_section_documentation("NonExistentSection");
+        assert!(no_doc.is_none());
+    }
+
+    #[test]
+    fn test_get_directive_documentation() {
+        let completion = SystemdCompletion::new();
+
+        // Test existing detailed documentation
+        let desc_doc = completion.get_directive_documentation("description", "Unit");
+        assert!(desc_doc.is_some());
+
+        let type_doc = completion.get_directive_documentation("type", "Service");
+        assert!(type_doc.is_some());
+
+        // Test case insensitivity
+        let desc_doc_upper = completion.get_directive_documentation("DESCRIPTION", "Unit");
+        assert!(desc_doc_upper.is_some());
+        assert_eq!(desc_doc, desc_doc_upper);
+
+        // Test non-existent documentation
+        let no_doc = completion.get_directive_documentation("NonExistent", "Unit");
+        assert!(no_doc.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_no_duplicate_completions() {
+        let completion = SystemdCompletion::new();
+        let uri = Url::parse("file:///test.service").unwrap();
+        let position = Position::new(0, 0);
+
+        let result = completion.get_completions(&uri, &position).await;
+
+        if let Some(CompletionResponse::Array(items)) = result {
+            let mut labels = std::collections::HashSet::new();
+            let mut duplicates = Vec::new();
+
+            for item in &items {
+                if !labels.insert(&item.label) {
+                    duplicates.push(&item.label);
+                }
+            }
+
+            assert!(
+                duplicates.is_empty(),
+                "Found duplicate completion labels: {:?}",
+                duplicates
+            );
+        }
+    }
+}

@@ -1,19 +1,22 @@
 # [Service] Section
 
-The `[Service]` section contains information about the service and the process it supervises. This section is used for units of Type=service. A number of options that may be used in this section are shared with other unit types. These options are documented in systemd.exec(5), systemd.kill(5) and systemd.resource-control(5).
+The `[Service]` section encodes information about a process controlled and supervised by systemd. This section is used for units of type `service`. Many options that may be used in this section are shared with other unit types and are documented in [systemd.exec(5)](https://www.freedesktop.org/software/systemd/man/systemd.exec.html), [systemd.kill(5)](https://www.freedesktop.org/software/systemd/man/systemd.kill.html), and [systemd.resource-control(5)](https://www.freedesktop.org/software/systemd/man/systemd.resource-control.html).
+
+*Based on [systemd.service(5)](https://www.freedesktop.org/software/systemd/man/systemd.service.html) official documentation.*
 
 ## Service Types
 
 ### Type=
 Configures the unit type. The available options are:
 
-- **simple** (default): The main process of the service is specified in the command line. systemd will consider the service started immediately after the main service process has been forked off
-- **exec**: Similar to simple, but systemd will consider the service started up only after the main service process has been executed successfully
-- **forking**: The service forks a child process, exiting the parent process almost immediately. This tells systemd that the process is still running even though the parent exited
-- **oneshot**: This is useful for scripts that do a single job and then exit. You may want to set RemainAfterExit=yes as well
-- **dbus**: The service is considered ready when the specified BusName appears on DBus system message bus
-- **notify**: The service will issue a notification when it has finished starting up using sd_notify(3) or equivalent call
-- **idle**: The service will not be run until all active jobs are dispatched
+- **simple** (default): The main process of the service is specified in the command line. systemd will consider the service started immediately after the main service process has been forked off.
+- **exec**: Similar to simple, but systemd will consider the service started up only after the main service process has been executed successfully. This is the recommended type for long-running services.
+- **forking**: The service forks a child process, exiting the parent process almost immediately. This is the traditional daemon behavior. The original process is expected to exit, while the child continues to run as the main service process.
+- **oneshot**: This is useful for scripts that do a single job and then exit. The service is considered active even after the main process exits. You may want to set `RemainAfterExit=yes` as well.
+- **dbus**: The service is considered ready when the specified `BusName=` appears on the D-Bus system message bus.
+- **notify**: The service will issue a notification when it has finished starting up using [sd_notify(3)](https://www.freedesktop.org/software/systemd/man/sd_notify.html) or an equivalent call.
+- **notify-reload**: Similar to notify, but supports reloading via `RELOADING=1` and `READY=1` notifications.
+- **idle**: The service will not be run until all active jobs are dispatched. This avoids interleaving of shell output of services with the status output on the console.
 
 ## Execution Directives
 
@@ -35,8 +38,35 @@ Additional commands that are executed after the service is stopped. Syntax is th
 ### ExecReload=
 Commands to execute to trigger a configuration reload in the service.
 
+### ExecCondition=
+Commands executed before ExecStart= to check if the service should be started. If any command fails, the service is not started, but this is not considered a failure.
+
+### ExecStopPre=
+Additional commands that are executed before the service is stopped. These commands are executed before ExecStop=.
+
 ### RestartSec=
 Configures the time to sleep before restarting a service (as configured with Restart=). Takes a unit-less value in seconds, or a time span value such as "5min 20s".
+
+### RestartSteps=
+Configure the number of steps to take to increase the restart delay between RestartSec= and RestartMaxDelaySec=.
+
+### RestartMaxDelaySec=
+Configure the longest time to sleep before restarting a service as the number of restart steps increases.
+
+### ExitType=
+Specifies how to determine the exit status of the service. Takes one of main, cgroup.
+
+### RemainAfterExit=
+Takes a boolean value that specifies whether the service shall be considered active even when all its processes exited.
+
+### GuessMainPID=
+Takes a boolean value that specifies whether systemd should try to guess the main PID of a service if it cannot be determined reliably.
+
+### PIDFile=
+Takes a path referring to the PID file of the service. Usage of this option is recommended for services where Type=forking is used.
+
+### BusName=
+Takes a D-Bus bus name that this service is reachable as. This option is required for services where Type=dbus is used.
 
 ## Process Control
 
@@ -101,9 +131,9 @@ ProtectHome=yes
 
 ## See Also
 
-- systemd.service(5)
-- systemd.exec(5)
-- systemd.kill(5)
-- systemd.resource-control(5)
-- systemd(1)
-- systemctl(1)
+- [systemd.service(5)](https://www.freedesktop.org/software/systemd/man/systemd.service.html) - Service unit configuration
+- [systemd.exec(5)](https://www.freedesktop.org/software/systemd/man/systemd.exec.html) - Execution environment configuration
+- [systemd.kill(5)](https://www.freedesktop.org/software/systemd/man/systemd.kill.html) - Process killing configuration
+- [systemd.resource-control(5)](https://www.freedesktop.org/software/systemd/man/systemd.resource-control.html) - Resource control configuration
+- [systemd(1)](https://www.freedesktop.org/software/systemd/man/systemd.html) - systemd system and service manager
+- [systemctl(1)](https://www.freedesktop.org/software/systemd/man/systemctl.html) - Control systemd services and units
