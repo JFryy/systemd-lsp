@@ -1,4 +1,4 @@
-# systemd-ls
+# systemd-lsp
 
 A Language Server Protocol (LSP) implementation for systemd unit files, providing editing support with syntax highlighting, diagnostics, autocompletion, and documentation.
 
@@ -19,12 +19,12 @@ A Language Server Protocol (LSP) implementation for systemd unit files, providin
 ### Building from source
 
 ```bash
-git clone https://github.com/jfryy/systemdls.git
-cd systemd-ls
+git clone https://github.com/jfryy/systemd-lsp.git
+cd systemd-lsp
 cargo build --release
 ```
 
-The binary will be available at `target/release/systemd-ls`.
+The binary will be available at `target/release/systemd-lsp`.
 
 ## Usage
 
@@ -34,7 +34,7 @@ The binary will be available at `target/release/systemd-ls`.
 You can run the language server directly, although there is little reason to do so except for debugging purposes. An editor typically starts and stops the server implicitly.
 
 ```bash
-./target/release/systemd-ls
+./target/release/systemd-lsp
 ```
 
 ## Architecture
