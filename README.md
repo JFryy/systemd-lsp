@@ -41,31 +41,12 @@ The project is built using Cargo, Rust's package manager. The `--release` flag o
 Add this configuration to your Neovim setup:
 
 ```lua
-vim.api.nvim_create_autocmd("BufEnter", {
-    pattern = "*.service",
-    callback = function()
-        vim.bo.filetype = "systemd"
+local lsp = require('lspconfig')
 
-        local configs = require('lspconfig.configs')
-        if not configs.systemd_lsp then
-            configs.systemd_lsp = {
-                default_config = {
-                    cmd = { '/path/to/systemd-lsp/target/release/systemd-lsp' },
-                    filetypes = { 'systemd' },
-                    root_dir = require('lspconfig.util').find_git_root,
-                },
-            }
-        end
-
-        require('lspconfig').systemd_lsp.setup({
-            autostart = true,
-            single_file_support = true,
-        })
-    end,
+lsp.systemdls.setup({
+  -- ...
 })
 ```
-
-Replace `/path/to/systemd-lsp/target/release/systemd-lsp` with the actual path to your built binary.
 
 ### Manual execution
 
@@ -87,4 +68,3 @@ This project is designed to simplify the editing of Unit files by providing vali
 
 ## Contributing
 Contributions always welcome.
-
