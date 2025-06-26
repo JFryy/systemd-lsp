@@ -57,14 +57,16 @@ You can run the language server directly, although there is little reason to do 
 ```
 
 ## Architecture
+
 - **Embedded Documentation** - All manual pages built into the binary
 - **No External Dependencies** - Single binary with everything included
 - **Cross-Platform** - Works on Linux, macOS, and Windows
 - **LSP Standard Compliant** - Compatible with all LSP-capable editors
 
-
 ## About
+
 This project is designed to simplify the editing of Unit files by providing validation, autocompletion, and formatting features commonly available for modern languages and file formats. Inspired by [systemd-language-server](https://github.com/psacawa/systemd-language-server), it offers enhanced functionality and improved performance, leveraging Rust's memory safety and efficiency.
 
 ## Contributing
+
 Contributions always welcome.
