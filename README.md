@@ -16,6 +16,10 @@ A Language Server Protocol (LSP) implementation for systemd unit files, providin
 
 ## Installation
 
+### Prerequisites
+
+- Rust toolchain (install via [rustup](https://rustup.rs/))
+
 ### Building from source
 
 ```bash
@@ -26,8 +30,42 @@ cargo build --release
 
 The binary will be available at `target/release/systemd-lsp`.
 
+### Compilation
+
+The project is built using Cargo, Rust's package manager. The `--release` flag optimizes the build for performance. For development, you can use `cargo build` for faster compilation times with debug information.
+
 ## Usage
 
+### Neovim
+
+Add this configuration to your Neovim setup:
+
+```lua
+vim.api.nvim_create_autocmd("BufEnter", {
+    pattern = "*.service",
+    callback = function()
+        vim.bo.filetype = "systemd"
+
+        local configs = require('lspconfig.configs')
+        if not configs.systemd_lsp then
+            configs.systemd_lsp = {
+                default_config = {
+                    cmd = { '/path/to/systemd-lsp/target/release/systemd-lsp' },
+                    filetypes = { 'systemd' },
+                    root_dir = require('lspconfig.util').find_git_root,
+                },
+            }
+        end
+
+        require('lspconfig').systemd_lsp.setup({
+            autostart = true,
+            single_file_support = true,
+        })
+    end,
+})
+```
+
+Replace `/path/to/systemd-lsp/target/release/systemd-lsp` with the actual path to your built binary.
 
 ### Manual execution
 
@@ -45,7 +83,7 @@ You can run the language server directly, although there is little reason to do 
 
 
 ## About
-This project was created as a learning exercise to explore Language Server Protocol implementation in Rust. While functional and comprehensive, it serves as both a (hopefully) useful tool for systemd configuration and a reference implementation for LSP development.
+This project is designed to simplify the editing of Unit files by providing validation, autocompletion, and formatting—features commonly available for modern languages and file formats. Inspired by [systemd-language-server](https://github.com/psacawa/systemd-language-server), it offers enhanced functionality and improved performance, leveraging Rust's memory safety and efficiency.
 
 ## Contributing
 Contributions always welcome.
