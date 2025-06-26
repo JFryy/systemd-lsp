@@ -17,9 +17,11 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
 
+        cargo = builtins.fromTOML (builtins.readFile ./Cargo.toml);
+
         systemd-lsp = pkgs.rustPlatform.buildRustPackage {
-          pname = "systemd-lsp";
-          version = "0.1.0";
+          pname = cargo.package.name;
+          version = cargo.package.version;
           src = self;
           cargoHash = "sha256-bYksgHTXomeEJuSk800+/PYXzMvrixSjfPnoqxStWAA=";
         };
