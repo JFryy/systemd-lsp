@@ -83,7 +83,7 @@ You can run the language server directly, although there is little reason to do 
 
 
 ## About
-This project is designed to simplify the editing of Unit files by providing validation, autocompletion, and formatting—features commonly available for modern languages and file formats. Inspired by [systemd-language-server](https://github.com/psacawa/systemd-language-server), it offers enhanced functionality and improved performance, leveraging Rust's memory safety and efficiency.
+This project is designed to simplify the editing of Unit files by providing validation, autocompletion, and formatting features commonly available for modern languages and file formats. Inspired by [systemd-language-server](https://github.com/psacawa/systemd-language-server), it offers enhanced functionality and improved performance, leveraging Rust's memory safety and efficiency.
 
 ## Contributing
 Contributions always welcome.
