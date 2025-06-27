@@ -402,6 +402,11 @@ fn setup_logging() {
 
 #[tokio::main]
 async fn main() {
+    if std::env::args().any(|arg| arg == "--version" || arg == "-V") {
+        println!("systemdls {}", env!("CARGO_PKG_VERSION"));
+        std::process::exit(0);
+    }
+
     setup_logging();
 
     let is_tty = atty::is(atty::Stream::Stdin) || atty::is(atty::Stream::Stdout);
@@ -437,4 +442,3 @@ async fn main() {
     info!("Starting LSP server");
     Server::new(stdin, stdout, socket).serve(service).await;
 }
-
