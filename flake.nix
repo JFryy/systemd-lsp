@@ -27,7 +27,6 @@
         };
 
         runtimeEnv = with pkgs; [
-          cargo
           rustc
           rustfmt
           clippy
