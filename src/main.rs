@@ -404,7 +404,7 @@ fn setup_logging() {
 async fn main() {
     if std::env::args().any(|arg| arg == "--version" || arg == "-V") {
         println!("systemdls {}", env!("CARGO_PKG_VERSION"));
-        return;
+        std::process::exit(0);
     }
 
     setup_logging();
