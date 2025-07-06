@@ -3,11 +3,11 @@ use crate::parser::{SystemdSection, SystemdUnit};
 use dashmap::DashMap;
 use log::{debug, trace};
 use std::collections::HashSet;
-use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, Position, Range, Url};
+use tower_lsp_server::lsp_types::{Diagnostic, DiagnosticSeverity, Position, Range, Uri};
 
 #[derive(Debug)]
 pub struct SystemdDiagnostics {
-    diagnostics: DashMap<Url, Vec<Diagnostic>>,
+    diagnostics: DashMap<Uri, Vec<Diagnostic>>,
     valid_sections: HashSet<&'static str>,
     section_directives: DashMap<&'static str, HashSet<&'static str>>,
 }
@@ -30,19 +30,19 @@ impl SystemdDiagnostics {
         }
     }
 
-    pub async fn update(&self, uri: &Url, unit: SystemdUnit) {
-        trace!("Updating diagnostics for {}", uri);
+    pub async fn update(&self, uri: &Uri, unit: SystemdUnit) {
+        trace!("Updating diagnostics for {:?}", uri);
         let mut diagnostics = Vec::new();
 
         for section in unit.sections.values() {
             self.validate_section(section, &mut diagnostics);
         }
 
-        debug!("Generated {} diagnostics for {}", diagnostics.len(), uri);
+        debug!("Generated {} diagnostics for {:?}", diagnostics.len(), uri);
         self.diagnostics.insert(uri.clone(), diagnostics);
     }
 
-    pub async fn get_diagnostics(&self, uri: &Url) -> Vec<Diagnostic> {
+    pub async fn get_diagnostics(&self, uri: &Uri) -> Vec<Diagnostic> {
         self.diagnostics
             .get(uri)
             .map(|entry| entry.clone())
@@ -156,7 +156,7 @@ mod tests {
     use super::*;
     use crate::parser::{SystemdDirective, SystemdSection};
     use std::collections::HashMap;
-    use tower_lsp::lsp_types::{DiagnosticSeverity, Url};
+    use tower_lsp_server::lsp_types::{DiagnosticSeverity, Uri};
 
     fn create_test_unit(sections: Vec<(&str, Vec<(&str, &str)>)>) -> SystemdUnit {
         let mut unit_sections = HashMap::new();
@@ -195,7 +195,7 @@ mod tests {
     #[tokio::test]
     async fn test_valid_unit_no_diagnostics() {
         let diagnostics = SystemdDiagnostics::new();
-        let uri = Url::parse("file:///test.service").unwrap();
+        let uri = "file:///test.service".parse::<Uri>().unwrap();
         
         let unit = create_test_unit(vec![
             ("Unit", vec![("Description", "Test service")]),
@@ -212,7 +212,7 @@ mod tests {
     #[tokio::test]
     async fn test_invalid_section_diagnostic() {
         let diagnostics = SystemdDiagnostics::new();
-        let uri = Url::parse("file:///test.service").unwrap();
+        let uri = "file:///test.service".parse::<Uri>().unwrap();
         
         let unit = create_test_unit(vec![
             ("InvalidSection", vec![("SomeKey", "SomeValue")]),
@@ -229,7 +229,7 @@ mod tests {
     #[tokio::test]
     async fn test_invalid_directive_diagnostic() {
         let diagnostics = SystemdDiagnostics::new();
-        let uri = Url::parse("file:///test.service").unwrap();
+        let uri = "file:///test.service".parse::<Uri>().unwrap();
         
         let unit = create_test_unit(vec![
             ("Unit", vec![("InvalidDirective", "SomeValue")]),
@@ -246,7 +246,7 @@ mod tests {
     #[tokio::test]
     async fn test_empty_execstart_diagnostic() {
         let diagnostics = SystemdDiagnostics::new();
-        let uri = Url::parse("file:///test.service").unwrap();
+        let uri = "file:///test.service".parse::<Uri>().unwrap();
         
         let unit = create_test_unit(vec![
             ("Service", vec![("ExecStart", "")]),
@@ -263,7 +263,7 @@ mod tests {
     #[tokio::test]
     async fn test_invalid_type_value_diagnostic() {
         let diagnostics = SystemdDiagnostics::new();
-        let uri = Url::parse("file:///test.service").unwrap();
+        let uri = "file:///test.service".parse::<Uri>().unwrap();
         
         let unit = create_test_unit(vec![
             ("Service", vec![("Type", "invalid_type")]),
@@ -280,7 +280,7 @@ mod tests {
     #[tokio::test]
     async fn test_multiple_diagnostics() {
         let diagnostics = SystemdDiagnostics::new();
-        let uri = Url::parse("file:///test.service").unwrap();
+        let uri = "file:///test.service".parse::<Uri>().unwrap();
         
         let unit = create_test_unit(vec![
             ("InvalidSection", vec![("SomeKey", "SomeValue")]),
@@ -297,8 +297,8 @@ mod tests {
     #[tokio::test]
     async fn test_diagnostics_persistence() {
         let diagnostics = SystemdDiagnostics::new();
-        let uri1 = Url::parse("file:///test1.service").unwrap();
-        let uri2 = Url::parse("file:///test2.service").unwrap();
+        let uri1 = "file:///test1.service".parse::<Uri>().unwrap();
+        let uri2 = "file:///test2.service".parse::<Uri>().unwrap();
         
         let unit1 = create_test_unit(vec![
             ("InvalidSection", vec![("SomeKey", "SomeValue")]),

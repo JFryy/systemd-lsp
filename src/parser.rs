@@ -3,7 +3,7 @@ use log::{debug, trace};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tower_lsp::lsp_types::{Position, Url};
+use tower_lsp_server::lsp_types::{Position, Uri};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemdUnit {
@@ -28,7 +28,7 @@ pub struct SystemdDirective {
 
 #[derive(Debug)]
 pub struct SystemdParser {
-    documents: DashMap<Url, SystemdUnit>,
+    documents: DashMap<Uri, SystemdUnit>,
     section_regex: Regex,
     directive_regex: Regex,
 }
@@ -116,16 +116,16 @@ impl SystemdParser {
         unit
     }
 
-    pub fn update_document(&self, uri: &Url, text: &str) {
+    pub fn update_document(&self, uri: &Uri, text: &str) {
         let parsed = self.parse(text);
         self.documents.insert(uri.clone(), parsed);
     }
 
-    pub fn get_parsed_document(&self, uri: &Url) -> Option<SystemdUnit> {
+    pub fn get_parsed_document(&self, uri: &Uri) -> Option<SystemdUnit> {
         self.documents.get(uri).map(|entry| entry.clone())
     }
 
-    pub fn get_document_text(&self, uri: &Url) -> Option<String> {
+    pub fn get_document_text(&self, uri: &Uri) -> Option<String> {
         self.documents.get(uri).map(|entry| entry.raw_text.clone())
     }
 
@@ -202,7 +202,7 @@ impl SystemdParser {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tower_lsp::lsp_types::{Position, Url};
+    use tower_lsp_server::lsp_types::{Position, Uri};
 
     #[test]
     fn test_parse_basic_systemd_file() {
@@ -431,7 +431,7 @@ mod tests {
     fn test_document_storage_and_retrieval() {
         let parser = SystemdParser::new();
         let content = "[Unit]\nDescription=Test\n";
-        let uri = Url::parse("file:///test.service").unwrap();
+        let uri = "file:///test.service".parse::<Uri>().unwrap();
 
         // Test that initially there's no document
         assert!(parser.get_parsed_document(&uri).is_none());

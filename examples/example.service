@@ -8,23 +8,10 @@ Wants=network-online.target
 Before=multi-user.target
 
 [Service]
-Type=simple
-User=www-data
-Group=www-data
-WorkingDirectory=/var/www/example
-ExecStart=/usr/bin/example-server --port 8080 --config /etc/example/config.toml
-ExecReload=/bin/kill -HUP $MAINPID
+Type=idle
+ExecStart=/usr/bin/example-server --port 8080
 Restart=on-failure
-RestartSec=5
-Environment=NODE_ENV=production
-EnvironmentFile=-/etc/default/example-server
-StandardOutput=journal
-StandardError=journal
-NoNewPrivileges=true
-ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=/var/www/example/logs
-PrivateTmp=true
+RestartSec=5s
 
 [Install]
 WantedBy=multi-user.target

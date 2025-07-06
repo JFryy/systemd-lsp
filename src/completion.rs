@@ -1,9 +1,9 @@
 use crate::constants::SystemdConstants;
 use log::{debug, trace};
 use std::collections::HashMap;
-use tower_lsp::lsp_types::{
+use tower_lsp_server::lsp_types::{
     CompletionItem, CompletionItemKind, CompletionResponse, Documentation, MarkupContent,
-    MarkupKind, Position, Url,
+    MarkupKind, Position, Uri,
 };
 
 #[derive(Debug)]
@@ -54,11 +54,11 @@ impl SystemdCompletion {
 
     pub async fn get_completions(
         &self,
-        uri: &Url,
+        uri: &Uri,
         position: &Position,
     ) -> Option<CompletionResponse> {
         trace!(
-            "Generating completions for {}:{} in {}",
+            "Generating completions for {}:{} in {:?}",
             position.line,
             position.character,
             uri
@@ -202,7 +202,7 @@ impl SystemdCompletion {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tower_lsp::lsp_types::{Position, Url};
+    use tower_lsp_server::lsp_types::{Position, Uri};
 
     #[tokio::test]
     async fn test_completion_creation() {
@@ -220,7 +220,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_completions_returns_results() {
         let completion = SystemdCompletion::new();
-        let uri = Url::parse("file:///test.service").unwrap();
+        let uri = "file:///test.service".parse::<Uri>().unwrap();
         let position = Position::new(0, 0);
 
         let result = completion.get_completions(&uri, &position).await;
@@ -244,7 +244,7 @@ mod tests {
     #[tokio::test]
     async fn test_completion_item_properties() {
         let completion = SystemdCompletion::new();
-        let uri = Url::parse("file:///test.service").unwrap();
+        let uri = "file:///test.service".parse::<Uri>().unwrap();
         let position = Position::new(0, 0);
 
         let result = completion.get_completions(&uri, &position).await;
@@ -337,7 +337,7 @@ mod tests {
     #[tokio::test]
     async fn test_no_duplicate_completions() {
         let completion = SystemdCompletion::new();
-        let uri = Url::parse("file:///test.service").unwrap();
+        let uri = "file:///test.service".parse::<Uri>().unwrap();
         let position = Position::new(0, 0);
 
         let result = completion.get_completions(&uri, &position).await;

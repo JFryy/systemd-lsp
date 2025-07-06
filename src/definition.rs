@@ -1,7 +1,8 @@
 use log::debug;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use tower_lsp::lsp_types::{GotoDefinitionResponse, Location, Position, Range, Url};
+use tower_lsp_server::lsp_types::{GotoDefinitionResponse, Location, Position, Range, Uri};
+use tower_lsp_server::UriExt;
 
 use crate::parser::SystemdParser;
 
@@ -81,11 +82,11 @@ impl SystemdDefinitionProvider {
     pub async fn get_definition(
         &self,
         parser: &SystemdParser,
-        uri: &Url,
+        uri: &Uri,
         position: &Position,
     ) -> Option<GotoDefinitionResponse> {
         debug!(
-            "Definition request at {}:{} in {}",
+            "Definition request at {}:{} in {:?}",
             position.line, position.character, uri
         );
 
@@ -130,7 +131,7 @@ impl SystemdDefinitionProvider {
                         "Updated shared temp file with {} documentation",
                         section_name
                     );
-                    if let Ok(uri) = Url::from_file_path(temp_file) {
+                    if let Some(uri) = Uri::from_file_path(temp_file) {
                         let location = Location {
                             uri,
                             range: Range {
@@ -177,7 +178,7 @@ impl SystemdDefinitionProvider {
 mod tests {
     use super::*;
     use crate::parser::SystemdParser;
-    use tower_lsp::lsp_types::{Position, Url};
+    use tower_lsp_server::lsp_types::{Position, Uri};
 
     #[test]
     fn test_embedded_documentation_exists() {
@@ -212,7 +213,7 @@ mod tests {
         // Create a test systemd file
         let content = "[Unit]\nDescription=Test service\n\n[Service]\nType=simple\n";
         let _parsed = parser.parse(content);
-        let uri = Url::parse("file:///test.service").unwrap();
+        let uri = "file:///test.service".parse::<Uri>().unwrap();
 
         // Store the parsed document
         parser.update_document(&uri, content);
@@ -239,7 +240,7 @@ mod tests {
         let parser = SystemdParser::new();
 
         let content = "[Unit]\nDescription=Test service\n";
-        let uri = Url::parse("file:///test.service").unwrap();
+        let uri = "file:///test.service".parse::<Uri>().unwrap();
         parser.update_document(&uri, content);
 
         // Test position not on a section header (line 1)
@@ -258,7 +259,7 @@ mod tests {
 
         // Create a file with an unknown section type
         let content = "[Unknown]\nSomeDirective=value\n";
-        let uri = Url::parse("file:///test.service").unwrap();
+        let uri = "file:///test.service".parse::<Uri>().unwrap();
         parser.update_document(&uri, content);
 
         let position = Position {
@@ -277,9 +278,9 @@ mod tests {
         // Test with different case variations
         let test_cases = vec!["[UNIT]", "[Unit]", "[unit]"];
 
-        for section_header in test_cases {
+        for (i, section_header) in test_cases.iter().enumerate() {
             let content = format!("{}\nDescription=Test\n", section_header);
-            let uri = Url::parse(&format!("file:///test{}.service", section_header)).unwrap();
+            let uri = format!("file:///test_{}.service", i).parse::<Uri>().unwrap();
             parser.update_document(&uri, &content);
 
             let position = Position {

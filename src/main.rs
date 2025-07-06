@@ -1,8 +1,8 @@
 use log::{debug, info, trace};
 use std::env;
-use tower_lsp::jsonrpc::Result;
-use tower_lsp::lsp_types::*;
-use tower_lsp::{Client, LanguageServer, LspService, Server};
+use tower_lsp_server::jsonrpc::Result;
+use tower_lsp_server::lsp_types::*;
+use tower_lsp_server::{Client, LanguageServer, LspService, Server};
 
 mod completion;
 mod constants;
@@ -27,7 +27,6 @@ pub struct SystemdLanguageServer {
     definition_provider: SystemdDefinitionProvider,
 }
 
-#[tower_lsp::async_trait]
 impl LanguageServer for SystemdLanguageServer {
     async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
         info!("LSP initialize request received");
@@ -78,7 +77,7 @@ impl LanguageServer for SystemdLanguageServer {
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
         let uri = &params.text_document.uri;
-        info!("Document opened: {}", uri);
+        info!("Document opened: {:?}", uri);
         debug!("Document language: {}", params.text_document.language_id);
         debug!("Document version: {}", params.text_document.version);
 
@@ -97,7 +96,7 @@ impl LanguageServer for SystemdLanguageServer {
     async fn did_change(&self, mut params: DidChangeTextDocumentParams) {
         let uri = &params.text_document.uri;
         debug!(
-            "Document changed: {} (version {})",
+            "Document changed: {:?} (version {})",
             uri, params.text_document.version
         );
         trace!("Content changes: {} items", params.content_changes.len());
@@ -112,14 +111,14 @@ impl LanguageServer for SystemdLanguageServer {
     }
 
     async fn did_save(&self, params: DidSaveTextDocumentParams) {
-        info!("Document saved: {}", params.text_document.uri);
+        info!("Document saved: {:?}", params.text_document.uri);
         self.client
             .log_message(MessageType::INFO, "file saved!")
             .await;
     }
 
     async fn did_close(&self, params: DidCloseTextDocumentParams) {
-        info!("Document closed: {}", params.text_document.uri);
+        info!("Document closed: {:?}", params.text_document.uri);
         self.client
             .log_message(MessageType::INFO, "file closed!")
             .await;
@@ -130,7 +129,7 @@ impl LanguageServer for SystemdLanguageServer {
         let position = &params.text_document_position.position;
 
         debug!(
-            "Completion request at {}:{} in {}",
+            "Completion request at {}:{} in {:?}",
             position.line, position.character, uri
         );
 
@@ -149,7 +148,7 @@ impl LanguageServer for SystemdLanguageServer {
         let position = &params.text_document_position_params.position;
 
         debug!(
-            "Hover request at {}:{} in {}",
+            "Hover request at {}:{} in {:?}",
             position.line, position.character, uri
         );
 
@@ -182,14 +181,14 @@ impl LanguageServer for SystemdLanguageServer {
 
     async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
         let uri = &params.text_document.uri;
-        debug!("Formatting request for {}", uri);
+        debug!("Formatting request for {:?}", uri);
 
         if let Some(document_text) = self.parser.get_document_text(uri) {
             let edits = self.formatter.format_document(uri, &document_text);
             debug!("Generated {} formatting edits", edits.len());
             Ok(Some(edits))
         } else {
-            debug!("Document not found for formatting: {}", uri);
+            debug!("Document not found for formatting: {:?}", uri);
             Ok(None)
         }
     }
@@ -200,14 +199,14 @@ impl LanguageServer for SystemdLanguageServer {
     ) -> Result<Option<Vec<TextEdit>>> {
         let uri = &params.text_document.uri;
         let range = &params.range;
-        debug!("Range formatting request for {} at {:?}", uri, range);
+        debug!("Range formatting request for {:?} at {:?}", uri, range);
 
         if let Some(document_text) = self.parser.get_document_text(uri) {
             let edits = self.formatter.format_range(uri, &document_text, *range);
             debug!("Generated {} range formatting edits", edits.len());
             Ok(Some(edits))
         } else {
-            debug!("Document not found for range formatting: {}", uri);
+            debug!("Document not found for range formatting: {:?}", uri);
             Ok(None)
         }
     }
@@ -220,7 +219,7 @@ impl LanguageServer for SystemdLanguageServer {
         let position = &params.text_document_position_params.position;
 
         debug!(
-            "Go to definition request at {}:{} in {}",
+            "Go to definition request at {}:{} in {:?}",
             position.line, position.character, uri
         );
 
@@ -253,7 +252,7 @@ impl SystemdLanguageServer {
     }
 
     async fn on_change(&self, params: TextDocumentItem) {
-        debug!("Processing document change for {}", params.uri);
+        debug!("Processing document change for {:?}", params.uri);
         trace!("Document text length: {} characters", params.text.len());
 
         let parsed = self.parser.parse(&params.text);
@@ -264,7 +263,7 @@ impl SystemdLanguageServer {
 
         let diagnostics = self.diagnostics.get_diagnostics(&params.uri).await;
         debug!(
-            "Publishing {} diagnostics for {}",
+            "Publishing {} diagnostics for {:?}",
             diagnostics.len(),
             params.uri
         );
@@ -274,9 +273,9 @@ impl SystemdLanguageServer {
             .await;
     }
 
-    async fn get_hover_info(&self, uri: &Url, position: &Position) -> Option<Hover> {
+    async fn get_hover_info(&self, uri: &Uri, position: &Position) -> Option<Hover> {
         trace!(
-            "Getting hover info for {}:{} in {}",
+            "Getting hover info for {}:{} in {:?}",
             position.line,
             position.character,
             uri

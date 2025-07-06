@@ -1,5 +1,5 @@
 use log::{debug, trace};
-use tower_lsp::lsp_types::{Position, Range, TextEdit, Url};
+use tower_lsp_server::lsp_types::{Position, Range, TextEdit, Uri};
 
 #[derive(Debug)]
 pub struct SystemdFormatter;
@@ -9,8 +9,8 @@ impl SystemdFormatter {
         Self
     }
 
-    pub fn format_document(&self, uri: &Url, text: &str) -> Vec<TextEdit> {
-        debug!("Formatting document: {}", uri);
+    pub fn format_document(&self, uri: &Uri, text: &str) -> Vec<TextEdit> {
+        debug!("Formatting document: {:?}", uri);
         trace!("Document text length: {}", text.len());
 
         let formatted_content = self.apply_opinionated_formatting(text);
@@ -35,8 +35,8 @@ impl SystemdFormatter {
         }
     }
 
-    pub fn format_range(&self, uri: &Url, text: &str, _range: Range) -> Vec<TextEdit> {
-        debug!("Formatting range in document: {}", uri);
+    pub fn format_range(&self, uri: &Uri, text: &str, _range: Range) -> Vec<TextEdit> {
+        debug!("Formatting range in document: {:?}", uri);
 
         // For range formatting, we'll format the entire document to maintain consistency
         // since our opinionated formatting affects spacing between sections
@@ -161,7 +161,7 @@ mod tests {
     #[test]
     fn test_format_document_integration() {
         let formatter = SystemdFormatter::new();
-        let uri = Url::parse("file:///test.service").unwrap();
+        let uri = "file:///test.service".parse::<Uri>().unwrap();
         let input = "[Unit]\nDescription = Test\n[Service]\nType = simple\n";
 
         let edits = formatter.format_document(&uri, input);
@@ -174,7 +174,7 @@ mod tests {
     #[test]
     fn test_format_document_no_changes_needed() {
         let formatter = SystemdFormatter::new();
-        let uri = Url::parse("file:///test.service").unwrap();
+        let uri = "file:///test.service".parse::<Uri>().unwrap();
         let input = "[Unit]\nDescription=Test\n\n[Service]\nType=simple\n";
 
         let edits = formatter.format_document(&uri, input);
