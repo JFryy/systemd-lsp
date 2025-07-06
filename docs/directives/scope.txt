@@ -1,0 +1,24 @@
+RuntimeMaxSec
+RuntimeRandomizedExtraSec
+# Scope units also inherit resource control directives from systemd.resource-control(5)
+# and process control directives from systemd.kill(5)
+# Common directives:
+MemoryAccounting
+MemoryLimit
+MemoryHigh
+MemoryMax
+CPUAccounting
+CPUQuota
+CPUWeight
+TasksAccounting
+TasksMax
+IOAccounting
+IOWeight
+BlockIOAccounting
+BlockIOWeight
+KillMode
+KillSignal
+RestartKillSignal
+SendSIGKILL
+SendSIGHUP
+WatchdogSignal

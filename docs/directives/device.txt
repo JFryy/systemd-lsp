@@ -1,0 +1,2 @@
+# Device units have no device-specific directives
+# They only use the generic [Unit] and [Install] sections

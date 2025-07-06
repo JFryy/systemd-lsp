@@ -65,6 +65,34 @@ impl SystemdConstants {
                 .filter(|line| !line.starts_with('#') && !line.trim().is_empty())
                 .collect(),
         );
+        map.insert(
+            "Automount",
+            include_str!("../docs/directives/automount.txt")
+                .lines()
+                .filter(|line| !line.starts_with('#') && !line.trim().is_empty())
+                .collect(),
+        );
+        map.insert(
+            "Device",
+            include_str!("../docs/directives/device.txt")
+                .lines()
+                .filter(|line| !line.starts_with('#') && !line.trim().is_empty())
+                .collect(),
+        );
+        map.insert(
+            "Slice",
+            include_str!("../docs/directives/slice.txt")
+                .lines()
+                .filter(|line| !line.starts_with('#') && !line.trim().is_empty())
+                .collect(),
+        );
+        map.insert(
+            "Scope",
+            include_str!("../docs/directives/scope.txt")
+                .lines()
+                .filter(|line| !line.starts_with('#') && !line.trim().is_empty())
+                .collect(),
+        );
 
         map
     }
@@ -179,6 +207,10 @@ impl SystemdConstants {
         map.insert("Mount", include_str!("../docs/sections/mount.txt"));
         map.insert("Path", include_str!("../docs/sections/path.txt"));
         map.insert("Swap", include_str!("../docs/sections/swap.txt"));
+        map.insert("Automount", include_str!("../docs/sections/automount.txt"));
+        map.insert("Device", include_str!("../docs/sections/device.txt"));
+        map.insert("Slice", include_str!("../docs/sections/slice.txt"));
+        map.insert("Scope", include_str!("../docs/sections/scope.txt"));
 
         map
     }
@@ -215,6 +247,10 @@ mod tests {
         assert!(directives.contains_key("Path"));
         assert!(directives.contains_key("Swap"));
         assert!(directives.contains_key("Target"));
+        assert!(directives.contains_key("Automount"));
+        assert!(directives.contains_key("Device"));
+        assert!(directives.contains_key("Slice"));
+        assert!(directives.contains_key("Scope"));
     }
 
     #[test]
@@ -326,11 +362,19 @@ mod tests {
         assert!(docs.contains_key("Unit"));
         assert!(docs.contains_key("Service"));
         assert!(docs.contains_key("Install"));
+        assert!(docs.contains_key("Automount"));
+        assert!(docs.contains_key("Device"));
+        assert!(docs.contains_key("Slice"));
+        assert!(docs.contains_key("Scope"));
 
         // Check that documentation is not empty
         assert!(!docs["Unit"].is_empty());
         assert!(!docs["Service"].is_empty());
         assert!(!docs["Install"].is_empty());
+        assert!(!docs["Automount"].is_empty());
+        assert!(!docs["Device"].is_empty());
+        assert!(!docs["Slice"].is_empty());
+        assert!(!docs["Scope"].is_empty());
     }
 
     #[test]

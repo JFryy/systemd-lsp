@@ -39,33 +39,22 @@ The project is built using Cargo, Rust's package manager. The `--release` flag o
 ### Neovim
 
 Add this configuration to your Neovim setup:
-
 ```lua
+-- Automatically set filetype and start LSP for specific file patterns
 vim.api.nvim_create_autocmd("BufEnter", {
     pattern = "*.service",
     callback = function()
         vim.bo.filetype = "systemd"
-
-        local configs = require('lspconfig.configs')
-        if not configs.systemd_lsp then
-            configs.systemd_lsp = {
-                default_config = {
-                    cmd = { '/path/to/systemd-lsp/target/release/systemd-lsp' },
-                    filetypes = { 'systemd' },
-                    root_dir = require('lspconfig.util').find_git_root,
-                },
-            }
-        end
-
-        require('lspconfig').systemd_lsp.setup({
-            autostart = true,
-            single_file_support = true,
+        vim.lsp.start({
+            name = 'systemd_ls',
+            cmd = { '/path/to/systemd-lsp' }, -- Update this path to your systemd-lsp binary
+            root_dir = vim.fn.getcwd(),
         })
     end,
 })
 ```
 
-Replace `/path/to/systemd-lsp/target/release/systemd-lsp` with the actual path to your built binary.
+Replace `/path/to/systemd-lsp` with the actual path to your built binary.
 
 ### Manual execution
 

@@ -1,0 +1,25 @@
+# Slice units use resource control directives from systemd.resource-control(5)
+# Common resource control directives:
+MemoryAccounting
+MemoryLimit
+MemoryHigh
+MemoryMax
+MemorySwapMax
+CPUAccounting
+CPUQuota
+CPUShares
+CPUWeight
+TasksAccounting
+TasksMax
+IOAccounting
+IOWeight
+IODeviceWeight
+IOReadBandwidthMax
+IOWriteBandwidthMax
+IOReadIOPSMax
+IOWriteIOPSMax
+BlockIOAccounting
+BlockIOWeight
+BlockIODeviceWeight
+BlockIOReadBandwidth
+BlockIOWriteBandwidth
