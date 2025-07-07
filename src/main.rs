@@ -336,7 +336,7 @@ impl SystemdLanguageServer {
             return Some(Hover {
                 contents: HoverContents::Markup(MarkupContent {
                     kind: MarkupKind::Markdown,
-                    value: format!("**systemd {} configuration**\n\nHover over section headers `[{}]` or directive names for detailed documentation.\n\n*Press Ctrl+Space for completions*", section.name.to_lowercase(), section.name),
+                    value: format!("**systemd {} configuration**\n\nHover over section headers `[{}]` or directive names for detailed documentation.", section.name.to_lowercase(), section.name),
                 }),
                 range: None,
             });
