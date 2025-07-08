@@ -26,12 +26,11 @@ jobs:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Build
         id: build
-        continue-on-error: true
         uses: mathiasvr/command-output@v2.0.0
         with:
           run: nix build
       - name: Calculate cargoHash
-        if: "contains(steps.build.outputs.stderr, 'ERROR: cargoHash or cargoSha256 is out of date')"
+        if: "failure() && contains(steps.build.outputs.stderr, 'ERROR: cargoHash or cargoSha256 is out of date')"
         run: |
           sed -i -E 's/cargoHash = ".+";/cargoHash = "";/g' flake.nix
           hash=$(nix build 2>&1 | sed -n -E 's/.*got: +([^ ]+).*/\1/p')
