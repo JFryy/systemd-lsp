@@ -104,3 +104,12 @@ LogLevelMax
 LogExtraFields
 LogRateLimitIntervalSec
 LogRateLimitBurst
+DevicePolicy
+DeviceAllow
+LockPersonality
+MemoryDenyWriteExecute
+ProtectHostname
+ProtectClock
+ProtectProc
+PrivatePIDs
+KillSignal

@@ -135,7 +135,7 @@ impl SystemdConstants {
         map.insert(
             "Type",
             &[
-                "simple", "exec", "forking", "oneshot", "dbus", "notify", "idle",
+                "simple", "exec", "forking", "oneshot", "dbus", "notify", "notify-reload", "idle",
             ] as &[&str],
         );
         map.insert(
@@ -162,7 +162,6 @@ impl SystemdConstants {
         // Boolean values for security directives
         let boolean_values = &["true", "false", "yes", "no", "1", "0"] as &[&str];
         map.insert("NoNewPrivileges", boolean_values);
-        map.insert("PrivateTmp", boolean_values);
         map.insert("PrivateDevices", boolean_values);
         map.insert("PrivateNetwork", boolean_values);
         map.insert("PrivateUsers", boolean_values);
@@ -176,6 +175,23 @@ impl SystemdConstants {
         map.insert("RemoveIPC", boolean_values);
         map.insert("DynamicUser", boolean_values);
         map.insert("MountAPIVFS", boolean_values);
+        map.insert("LockPersonality", boolean_values);
+        map.insert("MemoryDenyWriteExecute", boolean_values);
+        map.insert("ProtectHostname", boolean_values);
+        map.insert("ProtectClock", boolean_values);
+        map.insert("PrivatePIDs", boolean_values);
+
+        // PrivateTmp with additional 'disconnected' value
+        map.insert("PrivateTmp", &["true", "false", "yes", "no", "1", "0", "disconnected"] as &[&str]);
+
+        // DevicePolicy values
+        map.insert("DevicePolicy", &["auto", "closed", "strict"] as &[&str]);
+
+        // ProtectProc values
+        map.insert("ProtectProc", &["noaccess", "invisible", "ptraceable", "default"] as &[&str]);
+
+        // NotifyAccess values
+        map.insert("NotifyAccess", &["none", "main", "exec", "all"] as &[&str]);
 
         let standard_io_values = &[
             "inherit",
