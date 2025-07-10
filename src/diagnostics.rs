@@ -101,8 +101,7 @@ impl SystemdDiagnostics {
             return;
         }
 
-        let valid_values = SystemdConstants::valid_values();
-        if let Some(values) = valid_values.get(directive.key.as_str()) {
+        if let Some(values) = SystemdConstants::valid_values_for_section(&section.name, &directive.key) {
             let value = directive.value.as_str();
             let is_valid = match directive.key.as_str() {
                 "StandardOutput" | "StandardError" => {
