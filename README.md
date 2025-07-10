@@ -54,6 +54,13 @@ vim.api.nvim_create_autocmd("BufEnter", {
 })
 ```
 
+### Emacs
+```scheme
+(with-eval-after-load 'eglot
+  (add-to-list 'eglot-server-programs
+               '(systemd-mode "/path/to/systemd-lsp")))
+```
+
 Replace `/path/to/systemd-lsp` with the actual path to your built binary.
 
 ### Manual execution
