@@ -101,7 +101,9 @@ impl SystemdDiagnostics {
             return;
         }
 
-        if let Some(values) = SystemdConstants::valid_values_for_section(&section.name, &directive.key) {
+        if let Some(values) =
+            SystemdConstants::valid_values_for_section(&section.name, &directive.key)
+        {
             let value = directive.value.as_str();
             let is_valid = match directive.key.as_str() {
                 "StandardOutput" | "StandardError" => {
@@ -159,10 +161,10 @@ mod tests {
 
     fn create_test_unit(sections: Vec<(&str, Vec<(&str, &str)>)>) -> SystemdUnit {
         let mut unit_sections = HashMap::new();
-        
+
         for (i, (section_name, directives)) in sections.iter().enumerate() {
             let mut section_directives = HashMap::new();
-            
+
             for (j, (key, value)) in directives.iter().enumerate() {
                 section_directives.insert(
                     key.to_string(),
@@ -174,7 +176,7 @@ mod tests {
                     },
                 );
             }
-            
+
             unit_sections.insert(
                 section_name.to_string(),
                 SystemdSection {
@@ -184,7 +186,7 @@ mod tests {
                 },
             );
         }
-        
+
         SystemdUnit {
             sections: unit_sections,
             raw_text: String::new(),
@@ -195,16 +197,19 @@ mod tests {
     async fn test_valid_unit_no_diagnostics() {
         let diagnostics = SystemdDiagnostics::new();
         let uri = "file:///test.service".parse::<Uri>().unwrap();
-        
+
         let unit = create_test_unit(vec![
             ("Unit", vec![("Description", "Test service")]),
-            ("Service", vec![("Type", "simple"), ("ExecStart", "/bin/test")]),
+            (
+                "Service",
+                vec![("Type", "simple"), ("ExecStart", "/bin/test")],
+            ),
             ("Install", vec![("WantedBy", "multi-user.target")]),
         ]);
-        
+
         diagnostics.update(&uri, unit).await;
         let result = diagnostics.get_diagnostics(&uri).await;
-        
+
         assert_eq!(result.len(), 0);
     }
 
@@ -212,14 +217,12 @@ mod tests {
     async fn test_invalid_section_diagnostic() {
         let diagnostics = SystemdDiagnostics::new();
         let uri = "file:///test.service".parse::<Uri>().unwrap();
-        
-        let unit = create_test_unit(vec![
-            ("InvalidSection", vec![("SomeKey", "SomeValue")]),
-        ]);
-        
+
+        let unit = create_test_unit(vec![("InvalidSection", vec![("SomeKey", "SomeValue")])]);
+
         diagnostics.update(&uri, unit).await;
         let result = diagnostics.get_diagnostics(&uri).await;
-        
+
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].message, "Unknown section: [InvalidSection]");
         assert_eq!(result[0].range.start.line, 0);
@@ -229,16 +232,17 @@ mod tests {
     async fn test_invalid_directive_diagnostic() {
         let diagnostics = SystemdDiagnostics::new();
         let uri = "file:///test.service".parse::<Uri>().unwrap();
-        
-        let unit = create_test_unit(vec![
-            ("Unit", vec![("InvalidDirective", "SomeValue")]),
-        ]);
-        
+
+        let unit = create_test_unit(vec![("Unit", vec![("InvalidDirective", "SomeValue")])]);
+
         diagnostics.update(&uri, unit).await;
         let result = diagnostics.get_diagnostics(&uri).await;
-        
+
         assert_eq!(result.len(), 1);
-        assert_eq!(result[0].message, "Unknown directive 'InvalidDirective' in [Unit] section");
+        assert_eq!(
+            result[0].message,
+            "Unknown directive 'InvalidDirective' in [Unit] section"
+        );
         assert_eq!(result[0].severity, Some(DiagnosticSeverity::WARNING));
     }
 
@@ -246,14 +250,12 @@ mod tests {
     async fn test_empty_execstart_diagnostic() {
         let diagnostics = SystemdDiagnostics::new();
         let uri = "file:///test.service".parse::<Uri>().unwrap();
-        
-        let unit = create_test_unit(vec![
-            ("Service", vec![("ExecStart", "")]),
-        ]);
-        
+
+        let unit = create_test_unit(vec![("Service", vec![("ExecStart", "")])]);
+
         diagnostics.update(&uri, unit).await;
         let result = diagnostics.get_diagnostics(&uri).await;
-        
+
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].message, "ExecStart cannot be empty");
         assert_eq!(result[0].severity, Some(DiagnosticSeverity::ERROR));
@@ -263,16 +265,16 @@ mod tests {
     async fn test_invalid_type_value_diagnostic() {
         let diagnostics = SystemdDiagnostics::new();
         let uri = "file:///test.service".parse::<Uri>().unwrap();
-        
-        let unit = create_test_unit(vec![
-            ("Service", vec![("Type", "invalid_type")]),
-        ]);
-        
+
+        let unit = create_test_unit(vec![("Service", vec![("Type", "invalid_type")])]);
+
         diagnostics.update(&uri, unit).await;
         let result = diagnostics.get_diagnostics(&uri).await;
-        
+
         assert_eq!(result.len(), 1);
-        assert!(result[0].message.starts_with("Invalid Type value 'invalid_type'"));
+        assert!(result[0]
+            .message
+            .starts_with("Invalid Type value 'invalid_type'"));
         assert_eq!(result[0].severity, Some(DiagnosticSeverity::ERROR));
     }
 
@@ -280,16 +282,16 @@ mod tests {
     async fn test_multiple_diagnostics() {
         let diagnostics = SystemdDiagnostics::new();
         let uri = "file:///test.service".parse::<Uri>().unwrap();
-        
+
         let unit = create_test_unit(vec![
             ("InvalidSection", vec![("SomeKey", "SomeValue")]),
             ("Unit", vec![("InvalidDirective", "SomeValue")]),
             ("Service", vec![("ExecStart", ""), ("Type", "invalid_type")]),
         ]);
-        
+
         diagnostics.update(&uri, unit).await;
         let result = diagnostics.get_diagnostics(&uri).await;
-        
+
         assert!(result.len() >= 3);
     }
 
@@ -298,22 +300,17 @@ mod tests {
         let diagnostics = SystemdDiagnostics::new();
         let uri1 = "file:///test1.service".parse::<Uri>().unwrap();
         let uri2 = "file:///test2.service".parse::<Uri>().unwrap();
-        
-        let unit1 = create_test_unit(vec![
-            ("InvalidSection", vec![("SomeKey", "SomeValue")]),
-        ]);
-        let unit2 = create_test_unit(vec![
-            ("Unit", vec![("Description", "Valid service")]),
-        ]);
-        
+
+        let unit1 = create_test_unit(vec![("InvalidSection", vec![("SomeKey", "SomeValue")])]);
+        let unit2 = create_test_unit(vec![("Unit", vec![("Description", "Valid service")])]);
+
         diagnostics.update(&uri1, unit1).await;
         diagnostics.update(&uri2, unit2).await;
-        
+
         let result1 = diagnostics.get_diagnostics(&uri1).await;
         let result2 = diagnostics.get_diagnostics(&uri2).await;
-        
+
         assert_eq!(result1.len(), 1);
         assert_eq!(result2.len(), 0);
     }
 }
-

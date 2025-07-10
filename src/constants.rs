@@ -177,13 +177,19 @@ impl SystemdConstants {
         map.insert("PrivatePIDs", boolean_values);
 
         // PrivateTmp with additional 'disconnected' value
-        map.insert("PrivateTmp", &["true", "false", "yes", "no", "1", "0", "disconnected"] as &[&str]);
+        map.insert(
+            "PrivateTmp",
+            &["true", "false", "yes", "no", "1", "0", "disconnected"] as &[&str],
+        );
 
         // DevicePolicy values
         map.insert("DevicePolicy", &["auto", "closed", "strict"] as &[&str]);
 
         // ProtectProc values
-        map.insert("ProtectProc", &["noaccess", "invisible", "ptraceable", "default"] as &[&str]);
+        map.insert(
+            "ProtectProc",
+            &["noaccess", "invisible", "ptraceable", "default"] as &[&str],
+        );
 
         // NotifyAccess values
         map.insert("NotifyAccess", &["none", "main", "exec", "all"] as &[&str]);
@@ -207,10 +213,20 @@ impl SystemdConstants {
         map
     }
 
-    pub fn valid_values_for_section(section: &str, directive: &str) -> Option<&'static [&'static str]> {
+    pub fn valid_values_for_section(
+        section: &str,
+        directive: &str,
+    ) -> Option<&'static [&'static str]> {
         match (section, directive) {
             ("Service", "Type") => Some(&[
-                "simple", "exec", "forking", "oneshot", "dbus", "notify", "notify-reload", "idle",
+                "simple",
+                "exec",
+                "forking",
+                "oneshot",
+                "dbus",
+                "notify",
+                "notify-reload",
+                "idle",
             ]),
             ("Mount", "Type") => Some(&[
                 "ext4", "ext3", "ext2", "xfs", "btrfs", "vfat", "ntfs", "exfat", "iso9660",
@@ -322,7 +338,8 @@ mod tests {
     #[test]
     fn test_valid_values_for_type_directive() {
         // Test Service Type directive
-        let service_type_values = SystemdConstants::valid_values_for_section("Service", "Type").unwrap();
+        let service_type_values =
+            SystemdConstants::valid_values_for_section("Service", "Type").unwrap();
         assert!(service_type_values.contains(&"simple"));
         assert!(service_type_values.contains(&"exec"));
         assert!(service_type_values.contains(&"forking"));
@@ -332,7 +349,8 @@ mod tests {
         assert!(service_type_values.contains(&"idle"));
 
         // Test Mount Type directive
-        let mount_type_values = SystemdConstants::valid_values_for_section("Mount", "Type").unwrap();
+        let mount_type_values =
+            SystemdConstants::valid_values_for_section("Mount", "Type").unwrap();
         assert!(mount_type_values.contains(&"ext4"));
         assert!(mount_type_values.contains(&"exfat"));
         assert!(mount_type_values.contains(&"ntfs"));

@@ -1,4 +1,5 @@
 use crate::constants::SystemdConstants;
+use crate::parser::SystemdParser;
 use log::{debug, trace};
 use std::collections::HashMap;
 use tower_lsp_server::lsp_types::{
@@ -10,6 +11,13 @@ use tower_lsp_server::lsp_types::{
 pub struct SystemdCompletion {
     section_completions: Vec<CompletionItem>,
     directive_completions: HashMap<String, Vec<CompletionItem>>,
+}
+
+#[derive(Debug, Clone)]
+enum CompletionContext {
+    SectionHeader,
+    Directive(String),
+    Global,
 }
 
 impl SystemdCompletion {
@@ -54,6 +62,7 @@ impl SystemdCompletion {
 
     pub async fn get_completions(
         &self,
+        parser: &SystemdParser,
         uri: &Uri,
         position: &Position,
     ) -> Option<CompletionResponse> {
@@ -64,57 +73,88 @@ impl SystemdCompletion {
             uri
         );
 
-        // Return both sections and commonly used directives
-        let mut all_completions = Vec::new();
-        let mut seen_labels = std::collections::HashSet::new();
+        // Get the parsed document and document text
+        let unit = parser.get_parsed_document(uri)?;
+        let document_text = parser.get_document_text(uri)?;
 
-        // Add section completions first
-        for completion in &self.section_completions {
-            if seen_labels.insert(completion.label.clone()) {
-                all_completions.push(completion.clone());
+        // Determine the context at the current position
+        let completion_context = self.determine_context(parser, &unit, position, &document_text);
+
+        debug!("Completion context: {:?}", completion_context);
+
+        match completion_context {
+            CompletionContext::SectionHeader => {
+                // Only show section completions
+                debug!("Providing section completions");
+                Some(CompletionResponse::Array(self.section_completions.clone()))
             }
-        }
-
-        // Add Service section directives (most commonly used)
-        if let Some(service_directives) = self.directive_completions.get("Service") {
-            for completion in service_directives {
-                if seen_labels.insert(completion.label.clone()) {
-                    all_completions.push(completion.clone());
+            CompletionContext::Directive(section_name) => {
+                // Only show directives for the current section
+                debug!(
+                    "Providing directive completions for section: {}",
+                    section_name
+                );
+                if let Some(directives) = self.directive_completions.get(&section_name) {
+                    Some(CompletionResponse::Array(directives.clone()))
+                } else {
+                    debug!("No directives found for section: {}", section_name);
+                    Some(CompletionResponse::Array(Vec::new()))
                 }
             }
+            CompletionContext::Global => {
+                // Show section completions if we're not inside any section
+                debug!("Providing global completions (sections)");
+                Some(CompletionResponse::Array(self.section_completions.clone()))
+            }
+        }
+    }
+
+    fn determine_context(
+        &self,
+        parser: &SystemdParser,
+        unit: &crate::parser::SystemdUnit,
+        position: &Position,
+        document_text: &str,
+    ) -> CompletionContext {
+        let lines: Vec<&str> = document_text.lines().collect();
+        let current_line_index = position.line as usize;
+
+        // Check if we're beyond the document bounds
+        if current_line_index >= lines.len() {
+            return CompletionContext::Global;
         }
 
-        // Add Unit section directives
-        if let Some(unit_directives) = self.directive_completions.get("Unit") {
-            for completion in unit_directives {
-                if seen_labels.insert(completion.label.clone()) {
-                    all_completions.push(completion.clone());
-                }
+        let current_line = lines[current_line_index];
+        let character_position = position.character as usize;
+
+        // Check if we're at the start of a line that begins with '[' or completing a section header
+        if character_position == 0 || current_line.trim_start().starts_with('[') {
+            // Check if the line starts with '[' - this indicates section header context
+            if current_line.trim().starts_with('[')
+                || (character_position > 0
+                    && current_line
+                        .chars()
+                        .take(character_position)
+                        .collect::<String>()
+                        .trim()
+                        .starts_with('['))
+            {
+                return CompletionContext::SectionHeader;
             }
         }
 
-        // Add Install section directives
-        if let Some(install_directives) = self.directive_completions.get("Install") {
-            for completion in install_directives {
-                if seen_labels.insert(completion.label.clone()) {
-                    all_completions.push(completion.clone());
-                }
-            }
+        // Check if we're currently on a section header line
+        if let Some(_section_name) = parser.get_section_header_at_position(unit, position) {
+            return CompletionContext::SectionHeader;
         }
 
-        // Add other section directives
-        for section in &["Timer", "Socket", "Mount", "Path", "Swap"] {
-            if let Some(directives) = self.directive_completions.get(*section) {
-                for completion in directives {
-                    if seen_labels.insert(completion.label.clone()) {
-                        all_completions.push(completion.clone());
-                    }
-                }
-            }
+        // Check if we're inside a section (for directive completions)
+        if let Some(section) = parser.get_section_at_line(unit, position.line) {
+            return CompletionContext::Directive(section.name.clone());
         }
 
-        debug!("Generated {} total completion items", all_completions.len());
-        Some(CompletionResponse::Array(all_completions))
+        // Default to global context (show sections)
+        CompletionContext::Global
     }
 
     fn create_documentation(title: &str, description: &str, reference: &str) -> Documentation {
@@ -220,34 +260,38 @@ mod tests {
     #[tokio::test]
     async fn test_get_completions_returns_results() {
         let completion = SystemdCompletion::new();
+        let parser = SystemdParser::new();
         let uri = "file:///test.service".parse::<Uri>().unwrap();
         let position = Position::new(0, 0);
 
-        let result = completion.get_completions(&uri, &position).await;
+        // Add a basic document for testing
+        let document_text = "[Unit]\nDescription=Test\n\n[Service]\nType=simple\n";
+        parser.update_document(&uri, document_text);
+
+        let result = completion.get_completions(&parser, &uri, &position).await;
 
         assert!(result.is_some());
         if let Some(CompletionResponse::Array(items)) = result {
             assert!(!items.is_empty());
-
-            // Should contain section completions
+            // At global level, should show section completions
             assert!(items.iter().any(|item| item.label == "[Unit]"));
             assert!(items.iter().any(|item| item.label == "[Service]"));
             assert!(items.iter().any(|item| item.label == "[Install]"));
-
-            // Should contain common directives
-            assert!(items.iter().any(|item| item.label == "Description"));
-            assert!(items.iter().any(|item| item.label == "Type"));
-            assert!(items.iter().any(|item| item.label == "ExecStart"));
         }
     }
 
     #[tokio::test]
     async fn test_completion_item_properties() {
         let completion = SystemdCompletion::new();
+        let parser = SystemdParser::new();
         let uri = "file:///test.service".parse::<Uri>().unwrap();
         let position = Position::new(0, 0);
 
-        let result = completion.get_completions(&uri, &position).await;
+        // Add a basic document for testing
+        let document_text = "[Unit]\nDescription=Test\n\n[Service]\nType=simple\n";
+        parser.update_document(&uri, document_text);
+
+        let result = completion.get_completions(&parser, &uri, &position).await;
 
         if let Some(CompletionResponse::Array(items)) = result {
             // Find a section completion
@@ -255,15 +299,6 @@ mod tests {
             assert_eq!(section_item.kind, Some(CompletionItemKind::MODULE));
             assert!(section_item.detail.is_some());
             assert!(section_item.documentation.is_some());
-
-            // Find a directive completion
-            let directive_item = items
-                .iter()
-                .find(|item| item.label == "Description")
-                .unwrap();
-            assert_eq!(directive_item.kind, Some(CompletionItemKind::PROPERTY));
-            assert!(directive_item.insert_text.is_some());
-            assert_eq!(directive_item.insert_text.as_ref().unwrap(), "Description=");
         }
     }
 
@@ -337,10 +372,15 @@ mod tests {
     #[tokio::test]
     async fn test_no_duplicate_completions() {
         let completion = SystemdCompletion::new();
+        let parser = SystemdParser::new();
         let uri = "file:///test.service".parse::<Uri>().unwrap();
         let position = Position::new(0, 0);
 
-        let result = completion.get_completions(&uri, &position).await;
+        // Add a basic document for testing
+        let document_text = "[Unit]\nDescription=Test\n\n[Service]\nType=simple\n";
+        parser.update_document(&uri, document_text);
+
+        let result = completion.get_completions(&parser, &uri, &position).await;
 
         if let Some(CompletionResponse::Array(items)) = result {
             let mut labels = std::collections::HashSet::new();
@@ -357,6 +397,79 @@ mod tests {
                 "Found duplicate completion labels: {:?}",
                 duplicates
             );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_context_aware_completions() {
+        let completion = SystemdCompletion::new();
+        let parser = SystemdParser::new();
+        let uri = "file:///test.service".parse::<Uri>().unwrap();
+
+        // Test document with sections
+        let document_text = "[Unit]\nDescription=Test\n\n[Service]\nType=simple\n";
+        parser.update_document(&uri, document_text);
+
+        // Test completion at global level (line 0, before any sections)
+        let global_result = completion
+            .get_completions(&parser, &uri, &Position::new(0, 0))
+            .await;
+        if let Some(CompletionResponse::Array(items)) = global_result {
+            // Should only show section completions at global level
+            assert!(items.iter().any(|item| item.label == "[Unit]"));
+            assert!(items.iter().any(|item| item.label == "[Service]"));
+            // Should not show directives at global level
+            assert!(!items.iter().any(|item| item.label == "Description"));
+            assert!(!items.iter().any(|item| item.label == "Type"));
+        }
+
+        // Test completion inside Unit section (line 1)
+        let unit_result = completion
+            .get_completions(&parser, &uri, &Position::new(1, 0))
+            .await;
+        if let Some(CompletionResponse::Array(items)) = unit_result {
+            // Should only show Unit section directives
+            assert!(items.iter().any(|item| item.label == "Description"));
+            assert!(items.iter().any(|item| item.label == "Documentation"));
+            // Should not show Service-specific directives
+            assert!(!items.iter().any(|item| item.label == "Type"));
+            assert!(!items.iter().any(|item| item.label == "ExecStart"));
+        }
+
+        // Test completion inside Service section (line 4)
+        let service_result = completion
+            .get_completions(&parser, &uri, &Position::new(4, 0))
+            .await;
+        if let Some(CompletionResponse::Array(items)) = service_result {
+            // Should only show Service section directives
+            assert!(items.iter().any(|item| item.label == "Type"));
+            assert!(items.iter().any(|item| item.label == "ExecStart"));
+            // Should not show Unit-specific directives
+            assert!(!items.iter().any(|item| item.label == "Documentation"));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_section_header_completion() {
+        let completion = SystemdCompletion::new();
+        let parser = SystemdParser::new();
+        let uri = "file:///test.service".parse::<Uri>().unwrap();
+
+        // Test document with partial section header
+        let document_text = "[Un";
+        parser.update_document(&uri, document_text);
+
+        // Test completion in the middle of a section header
+        let result = completion
+            .get_completions(&parser, &uri, &Position::new(0, 3))
+            .await;
+        if let Some(CompletionResponse::Array(items)) = result {
+            // Should show section completions when in a section header
+            assert!(items.iter().any(|item| item.label == "[Unit]"));
+            assert!(items.iter().any(|item| item.label == "[Service]"));
+            // Should not show directives in section header context
+            assert!(!items.iter().any(|item| item.label == "Description"));
+            assert!(!items.iter().any(|item| item.label == "Type"));
         }
     }
 }
