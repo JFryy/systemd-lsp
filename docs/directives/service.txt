@@ -189,3 +189,13 @@ MemoryZSwapWriteback
 CPUQuotaPeriodSec
 AllowedCPUs
 AllowedMemoryNodes
+RuntimeDirectory
+StateDirectory
+CacheDirectory
+LogsDirectory
+ConfigurationDirectory
+RuntimeDirectoryMode
+StateDirectoryMode
+CacheDirectoryMode
+LogsDirectoryMode
+ConfigurationDirectoryMode
