@@ -280,7 +280,9 @@ mod tests {
 
         for (i, section_header) in test_cases.iter().enumerate() {
             let content = format!("{}\nDescription=Test\n", section_header);
-            let uri = format!("file:///test_{}.service", i).parse::<Uri>().unwrap();
+            let uri = format!("file:///test_{}.service", i)
+                .parse::<Uri>()
+                .unwrap();
             parser.update_document(&uri, &content);
 
             let position = Position {

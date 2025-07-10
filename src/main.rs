@@ -133,7 +133,10 @@ impl LanguageServer for SystemdLanguageServer {
             position.line, position.character, uri
         );
 
-        let result = self.completion.get_completions(uri, position).await;
+        let result = self
+            .completion
+            .get_completions(&self.parser, uri, position)
+            .await;
         let count = result.as_ref().map_or(0, |r| match r {
             CompletionResponse::Array(items) => items.len(),
             CompletionResponse::List(list) => list.items.len(),

@@ -11,6 +11,7 @@ A Language Server Protocol (LSP) implementation for systemd unit files, providin
 ### Core Language Server Features
 
 - **Syntax Analysis** - Complete parsing of systemd unit file structure
+- **Context Aware** - Context aware automcompletion for directives for corresponding sections
 - **Diagnostics** - Error detection and validation for sections, directives, directive fields and warnings for non-conventional configurations
 - **Autocompletion** - Context-aware suggestions for sections and directives
 - **Rich Documentation** - Comprehensive hover information and goto definition
@@ -82,7 +83,10 @@ You can run the language server directly, although there is little reason to do 
 
 ## About
 This project is designed to simplify the editing of Unit files by providing validation, autocompletion, and formatting features commonly available for modern languages and file formats. Inspired by [systemd-language-server](https://github.com/psacawa/systemd-language-server), it offers enhanced functionality and improved performance, leveraging Rust's memory safety and efficiency.
+I don't always have a ton of time for staying up to date with all the changes that occur to systemd, so contributions or other maintainers of this language server are greatly appreciated. This language
+server has the somewhat unique difficulty of maintaing a large static list of directives for sections that can change on occasion rather than having the challenge of maintaining an AST for an actual programming language. 
+Any systemD experts would be appreciated for their input, feedback, or maintaining of this language server while the latter half of bugs are squashed out.
 
 ## Contributing
-Contributions always welcome.
+Contributions are always encouraged and welcome. Please provide details and tests if appropriate for your changes.
 
