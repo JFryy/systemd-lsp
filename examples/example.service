@@ -1,31 +1,277 @@
-# Example systemd service unit file
-# This file demonstrates various systemd directives and can be used for testing the LSP
+# Massive systemd service unit file for comprehensive LSP testing
+# This file demonstrates a wide variety of systemd directives across all sections
+# Use this to test autocompletion, validation, hover documentation, and more
+# https://www.freedesktop.org/software/systemd/man/latest/systemd.directives.html
+
 [Unit]
-Description=Example web server service
-Documentation=https://example.com/docs
-After=network.target
-Wants=network-online.target
-Before=multi-user.target
+Description=Comprehensive example service with extensive configuration
+Documentation=https://example.com/docs https://wiki.example.com/service-setup
+After=network.target network-online.target time-sync.target
+Before=multi-user.target graphical.target
+Wants=network-online.target time-sync.target
+Requires=example-database.service
+Conflicts=example-legacy.service
+OnFailure=example-failure-handler.service
+PropagatesReloadTo=example-worker.service
+ReloadPropagatedFrom=example-config.service
+JoinsNamespaceOf=example-namespace.service
+RequiresMountsFor=/var/lib/example /opt/example
+AssertPathExists=/etc/example/config.toml
+AssertFileNotEmpty=/etc/example/secrets.env
+ConditionPathExists=/usr/bin/example-server
+ConditionFileNotEmpty=/etc/example/config.toml
+ConditionDirectoryNotEmpty=/var/lib/example
+ConditionHost=production-server
+ConditionKernelVersion=>=5.4
+ConditionMemory=>1G
+ConditionArchitecture=x86-64
+ConditionVirtualization=no
+ConditionSecurity=selinux
+ConditionCapability=CAP_NET_BIND_SERVICE
+ConditionACPower=true
+ConditionNeedsUpdate=/var/lib/example
+ConditionFirstBoot=no
+DefaultDependencies=true
+RefuseManualStart=false
+RefuseManualStop=false
+AllowIsolate=false
+StopWhenUnneeded=false
+IgnoreOnIsolate=false
+CollectMode=inactive
+FailureAction=reboot
+SuccessAction=none
+FailureActionExitStatus=1
+SuccessActionExitStatus=0
+JobTimeoutSec=10min
+JobRunningTimeoutSec=infinity
+JobTimeoutAction=terminate
+JobTimeoutRebootArgument=reboot-on-timeout
+StartLimitIntervalSec=30s
+StartLimitBurst=5
+StartLimitAction=reboot
+RebootArgument=service-failure
 
 [Service]
-Type=simple
-User=www-data
-Group=www-data
-WorkingDirectory=/var/www/example
-ExecStart=/usr/bin/example-server --port 8080 --config /etc/example/config.toml
+Type=notify
+ExitType=main
+RemainAfterExit=false
+GuessMainPID=false
+PIDFile=/var/run/example-server.pid
+BusName=com.example.Server
+ExecStart=/usr/bin/example-server --daemon --config /etc/example/config.toml --pid-file /var/run/example-server.pid
+ExecStartPre=/usr/bin/example-pre-start --check-config /etc/example/config.toml
+ExecStartPre=/bin/mkdir -p /var/lib/example/logs
+ExecStartPost=/usr/bin/example-post-start --notify-ready
+ExecCondition=/usr/bin/example-condition-check --verify-environment
 ExecReload=/bin/kill -HUP $MAINPID
+ExecReload=/usr/bin/example-server --reload-config
+ExecStop=/usr/bin/example-server --graceful-shutdown
+ExecStopPre=/usr/bin/example-pre-stop --prepare-shutdown
+ExecStopPost=/usr/bin/example-post-stop --cleanup-temp-files
+RestartSec=5s
+RestartSteps=10
+RestartMaxDelaySec=30s
+TimeoutStartSec=30s
+TimeoutStopSec=15s
+TimeoutAbortSec=10s
+TimeoutSec=45s
+TimeoutStartFailureMode=terminate
+TimeoutStopFailureMode=abort
+RuntimeMaxSec=24h
+RuntimeRandomizedExtraSec=10min
+WatchdogSec=30s
 Restart=on-failure
-RestartSec=5
+RestartMode=normal
+SuccessExitStatus=0 1 2 SIGTERM SIGINT
+RestartPreventExitStatus=3 4 SIGKILL
+RestartForceExitStatus=5 6 SIGQUIT
+RootDirectoryStartOnly=false
+NonBlocking=false
+NotifyAccess=main
+Sockets=example-server.socket example-admin.socket
+FileDescriptorStoreMax=100
+FileDescriptorStorePreserve=yes
+USBFunctionDescriptors=/etc/example/usb-descriptors
+USBFunctionStrings=/etc/example/usb-strings
+OOMPolicy=stop
+OpenFile=/var/log/example.log:write:1
+OpenFile=/etc/example/readonly.conf:read:1
+ReloadSignal=SIGHUP
+
+# User and Group Configuration
+User=example-user
+Group=example-group
+DynamicUser=false
+SupplementaryGroups=audio video log
+PAMName=example-service
+
+# Working Directory and Environment
+WorkingDirectory=/var/lib/example
+RootDirectory=/var/lib/example/chroot
+RootImage=/var/lib/example/rootfs.img
 Environment=NODE_ENV=production
-EnvironmentFile=-/etc/default/example-server
+Environment=LOG_LEVEL=info
+Environment=MAX_CONNECTIONS=1000
+EnvironmentFile=/etc/default/example-server
+EnvironmentFile=-/etc/example/optional.env
+PassEnvironment=HOME PATH USER
+UnsetEnvironment=TEMP TMP
+
+# Standard I/O Configuration
+StandardInput=null
 StandardOutput=journal
-StandardError=journal
+StandardError=journal+console
+StandardInputText=Initial input text
+StandardInputData=aGVsbG8gd29ybGQ=
+StandardOutputAppend=false
+StandardErrorAppend=false
+TTYPath=/dev/tty1
+TTYReset=false
+TTYVHangup=false
+TTYVTDisallocate=false
+
+# Logging Configuration
+SyslogIdentifier=example-server
+SyslogFacility=daemon
+SyslogLevel=info
+SyslogLevelPrefix=true
+LogLevelMax=debug
+LogExtraFields=SERVICE_NAME=example-server
+LogExtraFields=SERVICE_VERSION=1.2.3
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=1000
+LogNamespace=example
+
+# Resource Management
+Slice=example.slice
+Delegate=false
+DelegateControllers=cpu memory pids
+TasksMax=1000
+CPUWeight=100
+StartupCPUWeight=200
+CPUQuota=50%
+CPUAffinity=0-3
+NUMAPolicy=default
+NUMAMask=0,1
+IOWeight=100
+StartupIOWeight=200
+IODeviceWeight=/dev/sda 200
+IOReadBandwidthMax=/dev/sda 100M
+IOWriteBandwidthMax=/dev/sda 50M
+IOReadIOPSMax=/dev/sda 1000
+IOWriteIOPSMax=/dev/sda 500
+IODeviceLatencyTargetSec=/dev/sda 100ms
+BlockIOWeight=100
+StartupBlockIOWeight=200
+BlockIODeviceWeight=/dev/sda 200
+BlockIOReadBandwidth=/dev/sda 100M
+BlockIOWriteBandwidth=/dev/sda 50M
+DevicePolicy=auto
+DeviceAllow=/dev/null rw
+DeviceAllow=/dev/zero rw
+DeviceAllow=/dev/random r
+DeviceAllow=/dev/urandom r
+DeviceAllow=char-pts rw
+MemoryDenyWriteExecute=true
+MemoryMax=1G
+MemoryHigh=800M
+MemorySwapMax=500M
+MemoryZSwapMax=100M
+MemoryLow=100M
+MemoryMin=50M
+MemoryAccounting=true
+IPAccounting=true
+IPAddressAllow=192.168.1.0/24
+IPAddressDeny=0.0.0.0/0
+IPIngressFilterPath=/etc/example/ingress-filter.bpf
+IPEgressFilterPath=/etc/example/egress-filter.bpf
+BPFProgram=egress:/etc/example/egress.bpf
+
+# Security and Sandboxing
 NoNewPrivileges=true
+SecureBits=keep-caps
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_SETUID CAP_SETGID
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+UMask=0022
+KeyringMode=private
+OOMScoreAdjust=-500
+TimerSlackNSec=50000
+Personality=x86-64
+IgnoreSIGPIPE=true
+CoredumpFilter=0x7f
+
+# Filesystem and Mount Namespace
+PrivateTmp=true
+PrivateDevices=true
+PrivateNetwork=false
+PrivateUsers=false
+PrivateMounts=false
+PrivateIPC=false
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/www/example/logs
-PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+ReadWritePaths=/var/lib/example
+ReadWritePaths=/var/log/example
+ReadOnlyPaths=/etc/example
+InaccessiblePaths=/etc/shadow
+InaccessiblePaths=/etc/gshadow
+ExecPaths=/usr/bin /usr/sbin /bin /sbin
+NoExecPaths=/home /tmp /var/tmp
+TemporaryFileSystem=/tmp:rw,nodev,nosuid,size=100M
+TemporaryFileSystem=/var/tmp:rw,nodev,nosuid,size=50M
+BindPaths=/etc/example:/run/example/config
+BindReadOnlyPaths=/usr/share/example:/run/example/data
+MountAPIVFS=true
+MountImages=/var/lib/example/data.img:/mnt/data:ro
+ExtensionImages=/var/lib/example/ext.img
+ExtensionDirectories=/opt/example/extensions
+RootHash=a1b2c3d4e5f6...
+RootHashSignature=/etc/example/root-hash.sig
+RootVerity=/dev/mapper/example-verity
+SetCredential=api-key:secret-api-key-value
+SetCredentialEncrypted=db-password:encrypted-password-blob
+LoadCredential=ssl-cert:/etc/ssl/certs/example.pem
+LoadCredentialEncrypted=ssl-key:/etc/ssl/private/example.key.encrypted
+ImportCredential=inherited-*
+
+# Network and Communication
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RemoveIPC=true
+LockPersonality=true
+SystemCallFilter=@system-service
+SystemCallFilter=~@debug @mount @obsolete @privileged @resources @swap
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
+SystemCallLog=@debug @mount
+
+# Miscellaneous
+KillMode=control-group
+KillSignal=SIGTERM
+RestartKillSignal=SIGTERM
+SendSIGHUP=false
+SendSIGKILL=true
+FinalKillSignal=SIGKILL
+WatchdogSignal=SIGABRT
+FileDescriptorStoreMax=100
+
+[Mount]
+Type=exfat
 
 [Install]
 WantedBy=multi-user.target
+RequiredBy=example-dependent.service
 Also=example-server.socket
+Also=example-admin.socket
+Alias=example.service
+Alias=example-daemon.service
+DefaultInstance=production

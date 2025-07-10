@@ -132,12 +132,7 @@ impl SystemdConstants {
     pub fn valid_values() -> HashMap<&'static str, &'static [&'static str]> {
         let mut map = HashMap::new();
 
-        map.insert(
-            "Type",
-            &[
-                "simple", "exec", "forking", "oneshot", "dbus", "notify", "notify-reload", "idle",
-            ] as &[&str],
-        );
+        // Note: Type= is now handled context-sensitively in valid_values_for_section()
         map.insert(
             "Restart",
             &[
@@ -210,6 +205,24 @@ impl SystemdConstants {
         map.insert("StandardError", standard_io_values);
 
         map
+    }
+
+    pub fn valid_values_for_section(section: &str, directive: &str) -> Option<&'static [&'static str]> {
+        match (section, directive) {
+            ("Service", "Type") => Some(&[
+                "simple", "exec", "forking", "oneshot", "dbus", "notify", "notify-reload", "idle",
+            ]),
+            ("Mount", "Type") => Some(&[
+                "ext4", "ext3", "ext2", "xfs", "btrfs", "vfat", "ntfs", "exfat", "iso9660",
+                "tmpfs", "proc", "sysfs", "devpts", "nfs", "nfs4", "cifs", "sshfs", "bind",
+                "overlay", "squashfs", "fuse", "none", "auto",
+            ]),
+            _ => {
+                // Fall back to global valid_values for other directives
+                let global_values = Self::valid_values();
+                global_values.get(directive).map(|&v| v)
+            }
+        }
     }
 
     pub fn section_documentation() -> HashMap<&'static str, &'static str> {
@@ -308,16 +321,22 @@ mod tests {
 
     #[test]
     fn test_valid_values_for_type_directive() {
-        let valid_values = SystemdConstants::valid_values();
+        // Test Service Type directive
+        let service_type_values = SystemdConstants::valid_values_for_section("Service", "Type").unwrap();
+        assert!(service_type_values.contains(&"simple"));
+        assert!(service_type_values.contains(&"exec"));
+        assert!(service_type_values.contains(&"forking"));
+        assert!(service_type_values.contains(&"oneshot"));
+        assert!(service_type_values.contains(&"dbus"));
+        assert!(service_type_values.contains(&"notify"));
+        assert!(service_type_values.contains(&"idle"));
 
-        let type_values = valid_values.get("Type").unwrap();
-        assert!(type_values.contains(&"simple"));
-        assert!(type_values.contains(&"exec"));
-        assert!(type_values.contains(&"forking"));
-        assert!(type_values.contains(&"oneshot"));
-        assert!(type_values.contains(&"dbus"));
-        assert!(type_values.contains(&"notify"));
-        assert!(type_values.contains(&"idle"));
+        // Test Mount Type directive
+        let mount_type_values = SystemdConstants::valid_values_for_section("Mount", "Type").unwrap();
+        assert!(mount_type_values.contains(&"ext4"));
+        assert!(mount_type_values.contains(&"exfat"));
+        assert!(mount_type_values.contains(&"ntfs"));
+        assert!(mount_type_values.contains(&"tmpfs"));
     }
 
     #[test]
