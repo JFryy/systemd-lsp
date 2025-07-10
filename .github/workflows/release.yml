@@ -1,3 +1,6 @@
+permissions:
+  contents: write
+
 name: Release
 
 on:
