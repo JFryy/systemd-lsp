@@ -1,5 +1,7 @@
 # systemd-lsp
 
+[![Rust](https://github.com/jfryy/systemd-lsp/workflows/Rust/badge.svg)](https://github.com/jfryy/systemd-lsp/actions/workflows/rust.yml)
+
 A Language Server Protocol (LSP) implementation for systemd unit files, providing editing support with syntax highlighting, diagnostics, autocompletion, and documentation.
 
 ## Features
