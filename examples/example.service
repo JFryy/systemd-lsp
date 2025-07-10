@@ -24,7 +24,6 @@ ConditionDirectoryNotEmpty=/var/lib/example
 ConditionHost=production-server
 ConditionKernelVersion=>=5.4
 ConditionMemory=>1G
-ConditionCPUs>=2
 ConditionArchitecture=x86-64
 ConditionVirtualization=no
 ConditionSecurity=selinux
@@ -38,7 +37,6 @@ RefuseManualStop=false
 AllowIsolate=false
 StopWhenUnneeded=false
 IgnoreOnIsolate=false
-IgnoreOnSnapshot=false
 CollectMode=inactive
 FailureAction=reboot
 SuccessAction=none
