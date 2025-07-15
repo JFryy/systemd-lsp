@@ -43,9 +43,9 @@ The project is built using Cargo, Rust's package manager. The `--release` flag o
 
 Add this configuration to your Neovim setup:
 ```lua
--- Automatically set filetype and start LSP for specific file patterns
+-- Automatically set filetype and start LSP for specific systemd unit file patterns
 vim.api.nvim_create_autocmd("BufEnter", {
-    pattern = "*.service",
+    pattern = { "*.service", "*.mount", "*.device", "*.nspawn", "*.target", "*.timer" },
     callback = function()
         vim.bo.filetype = "systemd"
         vim.lsp.start({
