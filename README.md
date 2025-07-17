@@ -23,6 +23,14 @@ A Language Server Protocol (LSP) implementation for systemd unit files, providin
 
 - Rust toolchain (install via [rustup](https://rustup.rs/))
 
+### Install via Cargo
+
+```bash
+cargo install systemd-lsp
+```
+
+The binary will be installed to `~/.cargo/bin/systemd-lsp` (or `%USERPROFILE%\.cargo\bin\systemd-lsp` on Windows).
+
 ### Building from source
 
 ```bash
