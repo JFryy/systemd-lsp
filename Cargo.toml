@@ -17,10 +17,7 @@ exclude = [
     "*.tmp",
     ".git/",
     ".github/",
-    "docs/",
     "examples/",
-    "tests/fixtures/",
-    "*.md",
     "!README.md"
 ]
 
