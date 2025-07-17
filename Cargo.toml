@@ -11,6 +11,18 @@ documentation = "https://github.com/jfryy/systemd-lsp"
 keywords = ["systemd", "lsp", "language-server", "linux", "unit-files"]
 categories = ["development-tools", "text-editors"]
 readme = "README.md"
+exclude = [
+    "target/",
+    "*.log",
+    "*.tmp",
+    ".git/",
+    ".github/",
+    "docs/",
+    "examples/",
+    "tests/fixtures/",
+    "*.md",
+    "!README.md"
+]
 
 [[bin]]
 name = "systemd-lsp"
