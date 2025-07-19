@@ -1,0 +1,26 @@
+name: nix-build-check
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-nix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build
+        id: build
+        uses: mathiasvr/command-output@v2.0.0
+        with:
+          run: nix build
+      - name: Calculate cargoHash
+        if: "failure() && contains(steps.build.outputs.stderr, 'ERROR: cargoHash or cargoSha256 is out of date')"
+        run: |
+          sed -i -E 's/cargoHash = ".+";/cargoHash = "";/g' flake.nix
+          hash=$(nix build 2>&1 | sed -n -E 's/.*got: +([^ ]+).*/\1/p')
+          line=$(awk '/cargoHash/ { print NR }' flake.nix)
+          echo "::error file=flake.nix,line=$line,::cargoHash is out of date. Should be: $hash"
