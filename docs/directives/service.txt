@@ -199,3 +199,4 @@ StateDirectoryMode
 CacheDirectoryMode
 LogsDirectoryMode
 ConfigurationDirectoryMode
+NetworkNamespacePath
