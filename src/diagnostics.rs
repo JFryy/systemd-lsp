@@ -1,5 +1,5 @@
 use crate::constants::SystemdConstants;
-use crate::parser::{SystemdSection, SystemdUnit};
+use crate::parser::{DirectiveValueSpan, SystemdSection, SystemdUnit};
 use dashmap::DashMap;
 use log::{debug, trace};
 use std::collections::HashSet;
@@ -131,14 +131,27 @@ impl SystemdDiagnostics {
         directive: &crate::parser::SystemdDirective,
         message: String,
     ) -> Diagnostic {
-        let value_start = directive.column_range.1 + 1; // +1 for the '=' character
+        let value_start_span =
+            directive
+                .value_spans
+                .first()
+                .cloned()
+                .unwrap_or(DirectiveValueSpan {
+                    line: directive.line_number,
+                    start: directive.column_range.1 + 1,
+                    end: directive.column_range.1 + 1,
+                });
+
+        let value_end_span = directive
+            .value_spans
+            .last()
+            .cloned()
+            .unwrap_or(value_start_span.clone());
+
         Diagnostic {
             range: Range::new(
-                Position::new(directive.line_number, value_start),
-                Position::new(
-                    directive.line_number,
-                    value_start + directive.value.len() as u32,
-                ),
+                Position::new(value_start_span.line, value_start_span.start),
+                Position::new(value_end_span.line, value_end_span.end),
             ),
             severity: Some(DiagnosticSeverity::ERROR),
             code: None,
@@ -155,7 +168,7 @@ impl SystemdDiagnostics {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::{SystemdDirective, SystemdSection};
+    use crate::parser::{DirectiveValueSpan, SystemdDirective, SystemdSection};
     use std::collections::HashMap;
     use tower_lsp_server::lsp_types::{DiagnosticSeverity, Uri};
 
@@ -166,13 +179,24 @@ mod tests {
             let mut section_directives = HashMap::new();
 
             for (j, (key, value)) in directives.iter().enumerate() {
+                let line_number = (i * 10 + j + 1) as u32;
+                let value_start = key.len() as u32 + 1;
+                let end_column = value_start + value.len() as u32;
+                let spans = vec![DirectiveValueSpan {
+                    line: line_number,
+                    start: value_start,
+                    end: end_column,
+                }];
+
                 section_directives.insert(
                     key.to_string(),
                     SystemdDirective {
                         key: key.to_string(),
                         value: value.to_string(),
-                        line_number: (i * 10 + j + 1) as u32,
+                        line_number,
                         column_range: (0, key.len() as u32),
+                        end_line_number: line_number,
+                        value_spans: spans,
                     },
                 );
             }

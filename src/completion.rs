@@ -17,6 +17,7 @@ pub struct SystemdCompletion {
 enum CompletionContext {
     SectionHeader,
     Directive(String),
+    Value { section: String, directive: String },
     Global,
 }
 
@@ -101,6 +102,25 @@ impl SystemdCompletion {
                     Some(CompletionResponse::Array(Vec::new()))
                 }
             }
+            CompletionContext::Value {
+                section: section_name,
+                directive,
+            } => {
+                debug!(
+                    "Providing value completions for {}.{}",
+                    section_name, directive
+                );
+                match self.get_value_completions(section_name.as_str(), directive.as_str()) {
+                    Some(items) if !items.is_empty() => Some(CompletionResponse::Array(items)),
+                    _ => {
+                        debug!(
+                            "No value completions available for {}.{}",
+                            section_name, directive
+                        );
+                        None
+                    }
+                }
+            }
             CompletionContext::Global => {
                 // Show section completions if we're not inside any section
                 debug!("Providing global completions (sections)");
@@ -150,11 +170,82 @@ impl SystemdCompletion {
 
         // Check if we're inside a section (for directive completions)
         if let Some(section) = parser.get_section_at_line(unit, position.line) {
+            // Check if cursor is positioned within the value part of a directive on the same line
+            if let Some(eq_idx) = current_line.find('=') {
+                let eq_char_index = current_line[..eq_idx].chars().count() as u32;
+                if position.character > eq_char_index {
+                    let key = current_line[..eq_idx].trim();
+                    if !key.is_empty() {
+                        return CompletionContext::Value {
+                            section: section.name.clone(),
+                            directive: key.to_string(),
+                        };
+                    }
+                }
+            }
+
+            // Detect multi-line or continuation value contexts using recorded spans
+            if let Some(directive) = section.directives.values().find(|directive| {
+                directive.value_spans.iter().any(|span| {
+                    span.line == position.line
+                        && (span.line != directive.line_number || position.character >= span.start)
+                })
+            }) {
+                return CompletionContext::Value {
+                    section: section.name.clone(),
+                    directive: directive.key.clone(),
+                };
+            }
+
             return CompletionContext::Directive(section.name.clone());
         }
 
         // Default to global context (show sections)
         CompletionContext::Global
+    }
+
+    fn get_value_completions(
+        &self,
+        section_name: &str,
+        directive_name: &str,
+    ) -> Option<Vec<CompletionItem>> {
+        let section_map = SystemdConstants::section_directives();
+        let canonical_section = section_map
+            .keys()
+            .find(|name| name.eq_ignore_ascii_case(section_name))
+            .copied()
+            .unwrap_or(section_name);
+
+        let canonical_directive = section_map
+            .get(canonical_section)
+            .and_then(|directives| {
+                directives
+                    .iter()
+                    .find(|entry| entry.eq_ignore_ascii_case(directive_name))
+                    .copied()
+            })
+            .or_else(|| {
+                let global_values = SystemdConstants::valid_values();
+                global_values
+                    .keys()
+                    .find(|key| key.eq_ignore_ascii_case(directive_name))
+                    .copied()
+            })
+            .unwrap_or(directive_name);
+
+        let values =
+            SystemdConstants::valid_values_for_section(canonical_section, canonical_directive)?;
+
+        if values.is_empty() {
+            return None;
+        }
+
+        let items = values
+            .iter()
+            .map(|value| Self::create_value_completion(canonical_directive, value))
+            .collect::<Vec<_>>();
+
+        Some(items)
     }
 
     fn create_documentation(title: &str, description: &str, reference: &str) -> Documentation {
@@ -206,6 +297,21 @@ impl SystemdCompletion {
             "systemd directive".to_string(),
             documentation,
             Some(format!("{}=", key)),
+        )
+    }
+
+    fn create_value_completion(directive: &str, value: &str) -> CompletionItem {
+        let documentation = Documentation::MarkupContent(MarkupContent {
+            kind: MarkupKind::Markdown,
+            value: format!("Valid `{}` option for `{}`", value, directive),
+        });
+
+        Self::create_completion_item(
+            value.to_string(),
+            CompletionItemKind::VALUE,
+            format!("{} value", directive),
+            documentation,
+            Some(value.to_string()),
         )
     }
 
@@ -471,5 +577,50 @@ mod tests {
             assert!(!items.iter().any(|item| item.label == "Description"));
             assert!(!items.iter().any(|item| item.label == "Type"));
         }
+    }
+
+    #[tokio::test]
+    async fn test_value_completions_for_restart_directive() {
+        let completion = SystemdCompletion::new();
+        let parser = SystemdParser::new();
+        let uri = "file:///value-test.service".parse::<Uri>().unwrap();
+
+        let document_text = "[Service]\nRestart=\n";
+        parser.update_document(&uri, document_text);
+
+        let cursor = "Restart=".chars().count() as u32;
+        let result = completion
+            .get_completions(&parser, &uri, &Position::new(1, cursor))
+            .await;
+
+        if let Some(CompletionResponse::Array(items)) = result {
+            assert!(items.iter().any(|item| item.label == "no"));
+            assert!(items.iter().any(|item| item.label == "always"));
+            assert!(items
+                .iter()
+                .all(|item| item.kind == Some(CompletionItemKind::VALUE)));
+        } else {
+            panic!("Expected value completions for Restart directive");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_no_value_completions_for_freeform_directive() {
+        let completion = SystemdCompletion::new();
+        let parser = SystemdParser::new();
+        let uri = "file:///value-none.service".parse::<Uri>().unwrap();
+
+        let document_text = "[Unit]\nDescription=\n";
+        parser.update_document(&uri, document_text);
+
+        let cursor = "Description=".chars().count() as u32;
+        let result = completion
+            .get_completions(&parser, &uri, &Position::new(1, cursor))
+            .await;
+
+        assert!(
+            result.is_none(),
+            "Expected no completions for freeform directive value"
+        );
     }
 }

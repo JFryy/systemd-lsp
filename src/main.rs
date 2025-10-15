@@ -10,12 +10,14 @@ mod definition;
 mod diagnostics;
 mod formatting;
 mod parser;
+mod semantic_tokens;
 
 use completion::SystemdCompletion;
 use definition::SystemdDefinitionProvider;
 use diagnostics::SystemdDiagnostics;
 use formatting::SystemdFormatter;
 use parser::SystemdParser;
+use semantic_tokens::SystemdSemanticTokens;
 
 #[derive(Debug)]
 pub struct SystemdLanguageServer {
@@ -25,6 +27,7 @@ pub struct SystemdLanguageServer {
     completion: SystemdCompletion,
     formatter: SystemdFormatter,
     definition_provider: SystemdDefinitionProvider,
+    semantic_tokens: SystemdSemanticTokens,
 }
 
 impl LanguageServer for SystemdLanguageServer {
@@ -45,6 +48,14 @@ impl LanguageServer for SystemdLanguageServer {
             document_formatting_provider: Some(OneOf::Left(true)),
             document_range_formatting_provider: Some(OneOf::Left(true)),
             definition_provider: Some(OneOf::Left(true)),
+            semantic_tokens_provider: Some(
+                SemanticTokensServerCapabilities::SemanticTokensOptions(SemanticTokensOptions {
+                    work_done_progress_options: Default::default(),
+                    legend: SystemdSemanticTokens::legend(),
+                    range: Some(false),
+                    full: Some(SemanticTokensFullOptions::Bool(true)),
+                }),
+            ),
             ..ServerCapabilities::default()
         };
 
@@ -239,6 +250,20 @@ impl LanguageServer for SystemdLanguageServer {
 
         Ok(result)
     }
+
+    async fn semantic_tokens_full(
+        &self,
+        params: SemanticTokensParams,
+    ) -> Result<Option<SemanticTokensResult>> {
+        let uri = &params.text_document.uri;
+        debug!("Semantic tokens full request for {:?}", uri);
+
+        let tokens = self.semantic_tokens.get_semantic_tokens(&self.parser, uri);
+        let count = tokens.as_ref().map_or(0, |t| t.data.len());
+        debug!("Generated {} semantic tokens", count);
+
+        Ok(tokens.map(SemanticTokensResult::Tokens))
+    }
 }
 
 impl SystemdLanguageServer {
@@ -251,6 +276,7 @@ impl SystemdLanguageServer {
             completion: SystemdCompletion::new(),
             formatter: SystemdFormatter::new(),
             definition_provider: SystemdDefinitionProvider::new(),
+            semantic_tokens: SystemdSemanticTokens::new(),
         }
     }
 
