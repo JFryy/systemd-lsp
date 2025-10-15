@@ -60,10 +60,10 @@ PIDFile=/var/run/example-server.pid
 BusName=com.example.Server
 ExecStart=/usr/bin/example-server --daemon --config /etc/example/config.toml --pid-file /var/run/example-server.pid
 ExecStartPre=/usr/bin/example-pre-start --check-config /etc/example/config.toml
-ExecStartPre=/bin/mkdir -p /var/lib/example/logs
-ExecStartPost=/usr/bin/example-post-start --notify-ready
+ExecStartPost=/usr/bin/example-post-start \
+    --notify-ready \
+    --log-startup
 ExecCondition=/usr/bin/example-condition-check --verify-environment
-ExecReload=/bin/kill -HUP $MAINPID
 ExecReload=/usr/bin/example-server --reload-config
 ExecStop=/usr/bin/example-server --graceful-shutdown
 ExecStopPre=/usr/bin/example-pre-stop --prepare-shutdown
@@ -109,10 +109,7 @@ PAMName=example-service
 WorkingDirectory=/var/lib/example
 RootDirectory=/var/lib/example/chroot
 RootImage=/var/lib/example/rootfs.img
-Environment=NODE_ENV=production
 Environment=LOG_LEVEL=info
-Environment=MAX_CONNECTIONS=1000
-EnvironmentFile=/etc/default/example-server
 EnvironmentFile=-/etc/example/optional.env
 PassEnvironment=HOME PATH USER
 UnsetEnvironment=TEMP TMP
@@ -136,7 +133,6 @@ SyslogFacility=daemon
 SyslogLevel=info
 SyslogLevelPrefix=true
 LogLevelMax=debug
-LogExtraFields=SERVICE_NAME=example-server
 LogExtraFields=SERVICE_VERSION=1.2.3
 LogRateLimitIntervalSec=30s
 LogRateLimitBurst=1000
@@ -167,10 +163,6 @@ BlockIODeviceWeight=/dev/sda 200
 BlockIOReadBandwidth=/dev/sda 100M
 BlockIOWriteBandwidth=/dev/sda 50M
 DevicePolicy=auto
-DeviceAllow=/dev/null rw
-DeviceAllow=/dev/zero rw
-DeviceAllow=/dev/random r
-DeviceAllow=/dev/urandom r
 DeviceAllow=char-pts rw
 MemoryDenyWriteExecute=true
 MemoryMax=1G
@@ -217,14 +209,11 @@ ProtectControlGroups=true
 ProtectHostname=true
 ProtectProc=invisible
 ProcSubset=pid
-ReadWritePaths=/var/lib/example
 ReadWritePaths=/var/log/example
 ReadOnlyPaths=/etc/example
-InaccessiblePaths=/etc/shadow
 InaccessiblePaths=/etc/gshadow
 ExecPaths=/usr/bin /usr/sbin /bin /sbin
 NoExecPaths=/home /tmp /var/tmp
-TemporaryFileSystem=/tmp:rw,nodev,nosuid,size=100M
 TemporaryFileSystem=/var/tmp:rw,nodev,nosuid,size=50M
 BindPaths=/etc/example:/run/example/config
 BindReadOnlyPaths=/usr/share/example:/run/example/data
@@ -248,7 +237,6 @@ RestrictRealtime=true
 RestrictSUIDSGID=true
 RemoveIPC=true
 LockPersonality=true
-SystemCallFilter=@system-service
 SystemCallFilter=~@debug @mount @obsolete @privileged @resources @swap
 SystemCallErrorNumber=EPERM
 SystemCallArchitectures=native
@@ -270,8 +258,6 @@ Type=exfat
 [Install]
 WantedBy=multi-user.target
 RequiredBy=example-dependent.service
-Also=example-server.socket
 Also=example-admin.socket
-Alias=example.service
 Alias=example-daemon.service
 DefaultInstance=production

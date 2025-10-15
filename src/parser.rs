@@ -19,11 +19,20 @@ pub struct SystemdSection {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DirectiveValueSpan {
+    pub line: u32,
+    pub start: u32,
+    pub end: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemdDirective {
     pub key: String,
     pub value: String,
     pub line_number: u32,
     pub column_range: (u32, u32),
+    pub end_line_number: u32,
+    pub value_spans: Vec<DirectiveValueSpan>,
 }
 
 #[derive(Debug)]
@@ -51,8 +60,10 @@ impl SystemdParser {
 
         let mut current_section: Option<String> = None;
 
-        for (line_num, line) in text.lines().enumerate() {
-            let line_num = line_num as u32;
+        let mut lines = text.lines().enumerate().peekable();
+
+        while let Some((raw_line_num, line)) = lines.next() {
+            let line_num = raw_line_num as u32;
             let trimmed = line.trim();
 
             if trimmed.is_empty() || trimmed.starts_with('#') {
@@ -80,16 +91,94 @@ impl SystemdParser {
             } else if let Some(captures) = self.directive_regex.captures(trimmed) {
                 if let Some(section_name) = &current_section {
                     let key = captures[1].trim().to_string();
-                    let value = captures[2].trim().to_string();
+                    let raw_value = captures[2].to_string();
 
                     let key_start = line.find(&key).unwrap_or(0) as u32;
                     let key_end = key_start + key.len() as u32;
 
+                    let eq_index = line.find('=').map(|idx| idx as u32);
+                    let mut value_start = eq_index.unwrap_or(key_end) + 1;
+                    let after_eq = if let Some(eq_idx) = line.find('=') {
+                        &line[eq_idx + 1..]
+                    } else {
+                        ""
+                    };
+                    let leading_ws = after_eq.chars().take_while(|c| c.is_whitespace()).count();
+                    value_start += leading_ws as u32;
+
+                    let (mut fragment, mut continuation) = parse_value_fragment(&raw_value);
+                    let mut normalized_value = fragment.clone();
+                    let mut value_spans = Vec::new();
+
+                    let first_span_end = value_start + fragment.len() as u32;
+                    value_spans.push(DirectiveValueSpan {
+                        line: line_num,
+                        start: value_start,
+                        end: first_span_end,
+                    });
+
+                    let mut end_line_number = line_num;
+
+                    while continuation {
+                        if let Some((next_line_num, next_line)) = lines.next() {
+                            let next_line_trimmed = next_line.trim();
+                            end_line_number = next_line_num as u32;
+
+                            let indent = next_line.find(next_line_trimmed).unwrap_or(0) as u32;
+
+                            let (next_fragment, next_continuation) =
+                                parse_value_fragment(next_line_trimmed);
+
+                            if !next_fragment.is_empty() {
+                                if normalized_value.is_empty() {
+                                    normalized_value = next_fragment.clone();
+                                } else {
+                                    normalized_value.push(' ');
+                                    normalized_value.push_str(&next_fragment);
+                                }
+                            }
+
+                            value_spans.push(DirectiveValueSpan {
+                                line: end_line_number,
+                                start: indent,
+                                end: indent + next_fragment.len() as u32,
+                            });
+
+                            continuation = next_continuation;
+                            fragment = next_fragment;
+                        } else {
+                            break;
+                        }
+                    }
+
+                    if normalized_value.is_empty() {
+                        normalized_value = fragment;
+                    }
+
+                    // If the directive has no value, ensure spans reflect current position
+                    if normalized_value.is_empty() {
+                        value_spans.clear();
+                        value_spans.push(DirectiveValueSpan {
+                            line: line_num,
+                            start: value_start,
+                            end: value_start,
+                        });
+                        end_line_number = line_num;
+                    } else if value_spans.is_empty() {
+                        value_spans.push(DirectiveValueSpan {
+                            line: line_num,
+                            start: value_start,
+                            end: value_start + normalized_value.len() as u32,
+                        });
+                    }
+
                     let directive = SystemdDirective {
                         key: key.clone(),
-                        value,
+                        value: normalized_value,
                         line_number: line_num,
                         column_range: (key_start, key_end),
+                        end_line_number,
+                        value_spans,
                     };
 
                     if let Some(section) = unit.sections.get_mut(section_name) {
@@ -502,4 +591,70 @@ mod tests {
             .contains_key("DESCRIPTION"));
         assert!(parsed.sections["service"].directives.contains_key("type"));
     }
+
+    #[test]
+    fn test_parse_multiline_directive_execstart() {
+        let parser = SystemdParser::new();
+        let content =
+            "[Service]\nExecStart=/usr/bin/test \\\n    --flag value \\\n    --another-flag\n";
+
+        let parsed = parser.parse(content);
+        let service_section = parsed
+            .sections
+            .get("Service")
+            .expect("Service section missing");
+        let exec_start = service_section
+            .directives
+            .get("ExecStart")
+            .expect("ExecStart directive missing");
+
+        assert_eq!(
+            exec_start.value,
+            "/usr/bin/test --flag value --another-flag"
+        );
+        assert_eq!(exec_start.line_number, 1);
+        assert_eq!(exec_start.end_line_number, 3);
+        assert_eq!(exec_start.value_spans.len(), 3);
+
+        let first_span = &exec_start.value_spans[0];
+        assert_eq!(first_span.line, 1);
+        assert_eq!(first_span.start, 10);
+        assert_eq!(first_span.end, 23);
+
+        let second_span = &exec_start.value_spans[1];
+        assert_eq!(second_span.line, 2);
+        assert_eq!(second_span.start, 4);
+        assert_eq!(second_span.end, 16);
+
+        let third_span = &exec_start.value_spans[2];
+        assert_eq!(third_span.line, 3);
+        assert_eq!(third_span.start, 4);
+        assert_eq!(third_span.end, 18);
+    }
+}
+
+fn parse_value_fragment(text: &str) -> (String, bool) {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return (String::new(), false);
+    }
+
+    let mut backslash_count = 0usize;
+    for ch in trimmed.chars().rev() {
+        if ch == '\\' {
+            backslash_count += 1;
+        } else {
+            break;
+        }
+    }
+
+    let continuation = backslash_count % 2 == 1;
+    let mut fragment = trimmed.to_string();
+
+    if continuation {
+        fragment.pop();
+        fragment = fragment.trim_end().to_string();
+    }
+
+    (fragment, continuation)
 }
