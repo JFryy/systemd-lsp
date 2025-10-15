@@ -1,10 +1,10 @@
 # systemd-lsp
 
-[![Rust Build](https://github.com/jfryy/systemd-lsp/workflows/Rust/badge.svg)](https://github.com/jfryy/systemd-lsp/actions/workflows/rust.yml)
-[![Crates.io](https://img.shields.io/crates/v/systemd-lsp.svg)](https://crates.io/crates/systemd-lsp)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Downloads](https://img.shields.io/crates/d/systemd-lsp.svg)](https://crates.io/crates/systemd-lsp)
-[![Rust Version](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
+[![Rust Build]()](https://github.com/jfryy/systemd-lsp/actions/workflows/rust.yml)
+[![Crates.io]()](https://crates.io/crates/systemd-lsp)
+[![License: MIT]()](https://opensource.org/licenses/MIT)
+[![Downloads]()](https://crates.io/crates/systemd-lsp)
+[![Rust Version]()](https://www.rust-lang.org/)
 [![Release](https://img.shields.io/github/v/release/jfryy/systemd-lsp.svg)](https://github.com/jfryy/systemd-lsp/releases)
 
 A Language Server Protocol (LSP) implementation for systemd unit files, providing editing support with syntax highlighting, diagnostics, autocompletion, and documentation.
@@ -68,6 +68,17 @@ vim.api.nvim_create_autocmd("BufEnter", {
         })
     end,
 })
+```
+
+### Vim
+
+With [LSP](https://github.com/yegappan/lsp/blob/main/doc/configs.md), add to your `vimrc`
+
+```vim
+call LspAddServer([#{name: 'systemd_ls',
+                 \   filetype: 'systemd',
+                 \   path: 'systemd-lsp',
+                 \ }])
 ```
 
 ### Emacs
