@@ -1,0 +1,17 @@
+AllTags
+Arch
+AuthFile
+CertDir
+ContainersConfModule
+Creds
+DecryptionKey
+GlobalArgs
+Image
+ImageTag
+OS
+PodmanArgs
+Policy
+Retry
+RetryDelay
+TLSVerify
+Variant

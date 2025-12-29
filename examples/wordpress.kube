@@ -1,0 +1,19 @@
+[Unit]
+Description=WordPress application from Kubernetes YAML
+After=network-online.target
+Wants=network-online.target
+
+[Kube]
+Yaml=/etc/containers/wordpress/deployment.yaml
+ConfigMap=/etc/containers/wordpress/config.yaml
+Network=wordpress-net.network
+PublishPort=8080:80
+ExitCodePropagation=any
+AutoUpdate=registry
+
+[Service]
+Restart=always
+TimeoutStartSec=900
+
+[Install]
+WantedBy=multi-user.target

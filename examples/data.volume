@@ -1,0 +1,11 @@
+[Unit]
+Description=Application data volume
+
+[Volume]
+VolumeName=myapp-data
+User=1000
+Group=1000
+Label=app=myapp type=data
+
+[Install]
+WantedBy=multi-user.target

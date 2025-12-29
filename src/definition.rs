@@ -49,6 +49,34 @@ impl SystemdDefinitionProvider {
             "swap".to_string(),
             include_str!("../docs/swap.md").to_string(),
         );
+        documentation.insert(
+            "container".to_string(),
+            include_str!("../docs/container.md").to_string(),
+        );
+        documentation.insert(
+            "pod".to_string(),
+            include_str!("../docs/pod.md").to_string(),
+        );
+        documentation.insert(
+            "volume".to_string(),
+            include_str!("../docs/volume.md").to_string(),
+        );
+        documentation.insert(
+            "network".to_string(),
+            include_str!("../docs/network.md").to_string(),
+        );
+        documentation.insert(
+            "kube".to_string(),
+            include_str!("../docs/kube.md").to_string(),
+        );
+        documentation.insert(
+            "build".to_string(),
+            include_str!("../docs/build.md").to_string(),
+        );
+        documentation.insert(
+            "image".to_string(),
+            include_str!("../docs/image.md").to_string(),
+        );
 
         // Create a single shared temp file for all documentation
         let shared_temp_file = if let Ok(temp_dir) = std::env::temp_dir().canonicalize() {

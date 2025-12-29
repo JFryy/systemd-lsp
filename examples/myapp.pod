@@ -1,0 +1,20 @@
+[Unit]
+Description=Application pod
+After=network-online.target
+Wants=network-online.target
+
+[Pod]
+PodName=myapp-pod
+Network=mynetwork.network
+PublishPort=8080:80
+PublishPort=8443:443
+Volume=/srv/data:/data:Z
+DNS=8.8.8.8
+DNSSearch=example.com
+Label=app=myapp version=1.0
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

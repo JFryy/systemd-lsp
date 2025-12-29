@@ -1,0 +1,15 @@
+[Unit]
+Description=Build myapp container image
+
+[Build]
+File=./Containerfile
+SetWorkingDirectory=unit
+ImageTag=localhost/myapp:latest
+BuildArg=VERSION=1.0
+BuildArg=ENVIRONMENT=production
+Label=maintainer=admin@example.com version=1.0
+Pull=always
+Network=host
+
+[Install]
+WantedBy=multi-user.target
