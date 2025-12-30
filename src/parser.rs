@@ -288,6 +288,32 @@ impl SystemdParser {
     }
 }
 
+fn parse_value_fragment(text: &str) -> (String, bool) {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return (String::new(), false);
+    }
+
+    let mut backslash_count = 0usize;
+    for ch in trimmed.chars().rev() {
+        if ch == '\\' {
+            backslash_count += 1;
+        } else {
+            break;
+        }
+    }
+
+    let continuation = backslash_count % 2 == 1;
+    let mut fragment = trimmed.to_string();
+
+    if continuation {
+        fragment.pop();
+        fragment = fragment.trim_end().to_string();
+    }
+
+    (fragment, continuation)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -631,30 +657,4 @@ mod tests {
         assert_eq!(third_span.start, 4);
         assert_eq!(third_span.end, 18);
     }
-}
-
-fn parse_value_fragment(text: &str) -> (String, bool) {
-    let trimmed = text.trim();
-    if trimmed.is_empty() {
-        return (String::new(), false);
-    }
-
-    let mut backslash_count = 0usize;
-    for ch in trimmed.chars().rev() {
-        if ch == '\\' {
-            backslash_count += 1;
-        } else {
-            break;
-        }
-    }
-
-    let continuation = backslash_count % 2 == 1;
-    let mut fragment = trimmed.to_string();
-
-    if continuation {
-        fragment.pop();
-        fragment = fragment.trim_end().to_string();
-    }
-
-    (fragment, continuation)
 }

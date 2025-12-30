@@ -285,7 +285,7 @@ impl SystemdConstants {
             _ => {
                 // Fall back to global valid_values for other directives
                 let global_values = Self::valid_values();
-                global_values.get(directive).map(|&v| v)
+                global_values.get(directive).copied()
             }
         }
     }

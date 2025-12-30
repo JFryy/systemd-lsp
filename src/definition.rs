@@ -304,7 +304,7 @@ mod tests {
         let parser = SystemdParser::new();
 
         // Test with different case variations
-        let test_cases = vec!["[UNIT]", "[Unit]", "[unit]"];
+        let test_cases = ["[UNIT]", "[Unit]", "[unit]"];
 
         for (i, section_header) in test_cases.iter().enumerate() {
             let content = format!("{}\nDescription=Test\n", section_header);
