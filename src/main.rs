@@ -1,5 +1,6 @@
 use log::{debug, info, trace};
 use std::env;
+use std::io::IsTerminal;
 use tower_lsp_server::jsonrpc::Result;
 use tower_lsp_server::lsp_types::*;
 use tower_lsp_server::{Client, LanguageServer, LspService, Server};
@@ -389,8 +390,7 @@ impl SystemdLanguageServer {
 }
 
 fn setup_logging() {
-    let is_tty = atty::is(atty::Stream::Stdin) || atty::is(atty::Stream::Stdout);
-
+    let is_tty = std::io::stdin().is_terminal() || std::io::stdout().is_terminal();
     if is_tty {
         // Running in terminal mode - set up console logging
         let mut builder = env_logger::Builder::from_default_env();
@@ -437,7 +437,7 @@ async fn main() {
 
     setup_logging();
 
-    let is_tty = atty::is(atty::Stream::Stdin) || atty::is(atty::Stream::Stdout);
+    let is_tty = std::io::stdin().is_terminal() || std::io::stdout().is_terminal();
 
     if is_tty {
         // Terminal mode - show help and exit

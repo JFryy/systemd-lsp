@@ -1,0 +1,1 @@
+The [Image] section describes a container image pull operation that will be managed using Podman Quadlet. Image units use the .image file extension and are automatically converted into systemd service units. Image units ensure that container images are pulled and available for Container units to use.

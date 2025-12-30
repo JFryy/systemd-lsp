@@ -93,6 +93,55 @@ impl SystemdConstants {
                 .filter(|line| !line.starts_with('#') && !line.trim().is_empty())
                 .collect(),
         );
+        map.insert(
+            "Container",
+            include_str!("../docs/directives/container.txt")
+                .lines()
+                .filter(|line| !line.starts_with('#') && !line.trim().is_empty())
+                .collect(),
+        );
+        map.insert(
+            "Pod",
+            include_str!("../docs/directives/pod.txt")
+                .lines()
+                .filter(|line| !line.starts_with('#') && !line.trim().is_empty())
+                .collect(),
+        );
+        map.insert(
+            "Volume",
+            include_str!("../docs/directives/volume.txt")
+                .lines()
+                .filter(|line| !line.starts_with('#') && !line.trim().is_empty())
+                .collect(),
+        );
+        map.insert(
+            "Network",
+            include_str!("../docs/directives/network.txt")
+                .lines()
+                .filter(|line| !line.starts_with('#') && !line.trim().is_empty())
+                .collect(),
+        );
+        map.insert(
+            "Kube",
+            include_str!("../docs/directives/kube.txt")
+                .lines()
+                .filter(|line| !line.starts_with('#') && !line.trim().is_empty())
+                .collect(),
+        );
+        map.insert(
+            "Build",
+            include_str!("../docs/directives/build.txt")
+                .lines()
+                .filter(|line| !line.starts_with('#') && !line.trim().is_empty())
+                .collect(),
+        );
+        map.insert(
+            "Image",
+            include_str!("../docs/directives/image.txt")
+                .lines()
+                .filter(|line| !line.starts_with('#') && !line.trim().is_empty())
+                .collect(),
+        );
 
         map
     }
@@ -256,6 +305,13 @@ impl SystemdConstants {
         map.insert("Device", include_str!("../docs/sections/device.txt"));
         map.insert("Slice", include_str!("../docs/sections/slice.txt"));
         map.insert("Scope", include_str!("../docs/sections/scope.txt"));
+        map.insert("Container", include_str!("../docs/sections/container.txt"));
+        map.insert("Pod", include_str!("../docs/sections/pod.txt"));
+        map.insert("Volume", include_str!("../docs/sections/volume.txt"));
+        map.insert("Network", include_str!("../docs/sections/network.txt"));
+        map.insert("Kube", include_str!("../docs/sections/kube.txt"));
+        map.insert("Build", include_str!("../docs/sections/build.txt"));
+        map.insert("Image", include_str!("../docs/sections/image.txt"));
 
         map
     }

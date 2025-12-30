@@ -1,0 +1,1 @@
+The [Network] section describes a Podman network that will be managed using Podman Quadlet. Network units use the .network file extension and are automatically converted into systemd service units. Networks define custom networking configurations for containers and pods.

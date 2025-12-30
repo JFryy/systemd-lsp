@@ -1,0 +1,14 @@
+[Unit]
+Description=Application bridge network
+
+[Network]
+NetworkName=myapp-net
+Driver=bridge
+Subnet=10.88.0.0/16
+Gateway=10.88.0.1
+DNS=8.8.8.8
+DNS=8.8.4.4
+Label=app=myapp
+
+[Install]
+WantedBy=multi-user.target

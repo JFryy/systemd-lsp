@@ -1,0 +1,11 @@
+[Unit]
+Description=Pull nginx image from Docker Hub
+
+[Image]
+Image=docker.io/nginx:latest
+Policy=missing
+Retry=3
+RetryDelay=5s
+
+[Install]
+WantedBy=multi-user.target
