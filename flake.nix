@@ -23,7 +23,7 @@
           pname = cargo.package.name;
           version = cargo.package.version;
           src = self;
-          cargoHash = "sha256-++RJGmfdz/EvNxow5Igs45XSPw1NculEMDHrNNZg0rc=";
+          cargoHash = "sha256-D8XkMzh6dxXGGrDpkREUl0RkN/vhbw9uQYtqdiTcfBE=";
         };
 
         runtimeEnv = with pkgs; [
