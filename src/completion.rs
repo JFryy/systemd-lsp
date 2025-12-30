@@ -185,7 +185,7 @@ impl SystemdCompletion {
             }
 
             // Detect multi-line or continuation value contexts using recorded spans
-            if let Some(directive) = section.directives.values().find(|directive| {
+            if let Some(directive) = section.directives.iter().find(|directive| {
                 directive.value_spans.iter().any(|span| {
                     span.line == position.line
                         && (span.line != directive.line_number || position.character >= span.start)

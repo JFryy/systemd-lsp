@@ -14,7 +14,7 @@ pub struct SystemdUnit {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemdSection {
     pub name: String,
-    pub directives: HashMap<String, SystemdDirective>,
+    pub directives: Vec<SystemdDirective>,
     pub line_range: (u32, u32),
 }
 
@@ -84,7 +84,7 @@ impl SystemdParser {
                     section_name.clone(),
                     SystemdSection {
                         name: section_name,
-                        directives: HashMap::new(),
+                        directives: Vec::new(),
                         line_range: (line_num, line_num),
                     },
                 );
@@ -182,7 +182,7 @@ impl SystemdParser {
                     };
 
                     if let Some(section) = unit.sections.get_mut(section_name) {
-                        section.directives.insert(key, directive);
+                        section.directives.push(directive);
                     }
                 }
             }
@@ -333,14 +333,30 @@ mod tests {
         let unit_section = &parsed.sections["Unit"];
         assert_eq!(unit_section.line_range.0, 0);
         assert_eq!(unit_section.directives.len(), 2);
-        assert!(unit_section.directives.contains_key("Description"));
-        assert!(unit_section.directives.contains_key("After"));
+        assert!(unit_section
+            .directives
+            .iter()
+            .find(|directive| directive.key == "Description")
+            .is_some());
+        assert!(unit_section
+            .directives
+            .iter()
+            .find(|directive| directive.key == "After")
+            .is_some());
 
         let service_section = &parsed.sections["Service"];
         assert_eq!(service_section.line_range.0, 4);
         assert_eq!(service_section.directives.len(), 2);
-        assert!(service_section.directives.contains_key("Type"));
-        assert!(service_section.directives.contains_key("ExecStart"));
+        assert!(service_section
+            .directives
+            .iter()
+            .find(|directive| directive.key == "Type")
+            .is_some());
+        assert!(service_section
+            .directives
+            .iter()
+            .find(|directive| directive.key == "ExecStart")
+            .is_some());
     }
 
     #[test]
@@ -357,7 +373,11 @@ mod tests {
         // Comments and empty lines should be ignored
         let unit_section = &parsed.sections["Unit"];
         assert_eq!(unit_section.directives.len(), 1);
-        assert!(unit_section.directives.contains_key("Description"));
+        assert!(unit_section
+            .directives
+            .iter()
+            .find(|directive| directive.key == "Description")
+            .is_some());
     }
 
     #[test]
@@ -586,7 +606,12 @@ mod tests {
         let empty_value = parser.parse("[Unit]\nDescription=\n");
         assert_eq!(empty_value.sections.len(), 1);
         assert_eq!(
-            empty_value.sections["Unit"].directives["Description"].value,
+            empty_value.sections["Unit"]
+                .directives
+                .iter()
+                .find(|directive| directive.key == "Description")
+                .unwrap()
+                .value,
             ""
         );
 
@@ -594,7 +619,12 @@ mod tests {
         let spaced_equals = parser.parse("[Unit]\nDescription = Test Service \n");
         assert_eq!(spaced_equals.sections.len(), 1);
         assert_eq!(
-            spaced_equals.sections["Unit"].directives["Description"].value,
+            spaced_equals.sections["Unit"]
+                .directives
+                .iter()
+                .find(|directive| directive.key == "Description")
+                .unwrap()
+                .value,
             "Test Service"
         );
     }
@@ -614,8 +644,14 @@ mod tests {
         // Directive names should preserve case
         assert!(parsed.sections["UNIT"]
             .directives
-            .contains_key("DESCRIPTION"));
-        assert!(parsed.sections["service"].directives.contains_key("type"));
+            .iter()
+            .find(|directive| directive.key == "DESCRIPTION")
+            .is_some());
+        assert!(parsed.sections["service"]
+            .directives
+            .iter()
+            .find(|directive| directive.key == "type")
+            .is_some());
     }
 
     #[test]
@@ -631,7 +667,8 @@ mod tests {
             .expect("Service section missing");
         let exec_start = service_section
             .directives
-            .get("ExecStart")
+            .iter()
+            .find(|directive| directive.key == "ExecStart")
             .expect("ExecStart directive missing");
 
         assert_eq!(

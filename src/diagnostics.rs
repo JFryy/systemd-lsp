@@ -62,7 +62,7 @@ impl SystemdDiagnostics {
         }
 
         if let Some(valid_directives) = self.section_directives.get(section.name.as_str()) {
-            for directive in section.directives.values() {
+            for directive in &section.directives {
                 if !valid_directives.contains(directive.key.as_str()) {
                     diagnostics.push(Diagnostic {
                         range: Range::new(
@@ -176,7 +176,7 @@ mod tests {
         let mut unit_sections = HashMap::new();
 
         for (i, (section_name, directives)) in sections.iter().enumerate() {
-            let mut section_directives = HashMap::new();
+            let mut section_directives = Vec::new();
 
             for (j, (key, value)) in directives.iter().enumerate() {
                 let line_number = (i * 10 + j + 1) as u32;
@@ -188,8 +188,7 @@ mod tests {
                     end: end_column,
                 }];
 
-                section_directives.insert(
-                    key.to_string(),
+                section_directives.push(
                     SystemdDirective {
                         key: key.to_string(),
                         value: value.to_string(),

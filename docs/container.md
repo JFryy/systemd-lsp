@@ -595,6 +595,8 @@ Injects Podman secrets into the container as files or environment variables.
 
 **Format:** `secret[,opt=opt ...]` syntax
 
+**Multiple:** Yes
+
 ### GlobalArgs=
 Passes arguments directly between `podman` and `run` commands, enabling access to unsupported Podman features.
 
