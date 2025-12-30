@@ -56,7 +56,7 @@ impl SystemdSemanticTokens {
         let mut tokens = Vec::new();
 
         for section in unit.sections.values() {
-            for directive in section.directives.values() {
+            for directive in &section.directives {
                 // Highlight directive keys
                 if directive.column_range.1 > directive.column_range.0 {
                     tokens.push(TokenData {
