@@ -1,0 +1,1 @@
+The [Pod] section describes a Podman pod that will be managed as a systemd service using Podman Quadlet. Pod units use the .pod file extension and are automatically converted into systemd service units. Pods allow you to group multiple containers that share network namespaces and other resources.

@@ -1,0 +1,1 @@
+The [Build] section describes an OCI image build that will be managed using Podman Quadlet. Build units use the .build file extension and are automatically converted into systemd service units. Build units create container images from Containerfiles or Dockerfiles that can be referenced by Container units.
