@@ -452,7 +452,6 @@ async fn main() {
         println!("ENVIRONMENT VARIABLES:");
         println!("    SYSTEMDLS_LOG_LEVEL    Set log level (error, warn, info, debug, trace)");
         println!();
-        println!("For more information, see: https://github.com/jfryy/systemdls");
         return;
     }
 
