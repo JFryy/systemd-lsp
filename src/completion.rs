@@ -50,7 +50,11 @@ impl SystemdCompletion {
                     .get(&(section, directive))
                     .unwrap_or(&"systemd directive")
                     .to_string();
-                completion_items.push(Self::create_directive_completion(directive, &description));
+                completion_items.push(Self::create_directive_completion(
+                    section,
+                    directive,
+                    &description,
+                ));
             }
             directive_completions.insert(section.to_string(), completion_items);
         }
@@ -242,7 +246,9 @@ impl SystemdCompletion {
 
         let items = values
             .iter()
-            .map(|value| Self::create_value_completion(canonical_directive, value))
+            .map(|value| {
+                Self::create_value_completion(canonical_section, canonical_directive, value)
+            })
             .collect::<Vec<_>>();
 
         Some(items)
@@ -287,9 +293,90 @@ impl SystemdCompletion {
         }
     }
 
-    fn create_directive_completion(key: &str, description: &str) -> CompletionItem {
+    /*
+     * We Want to extract directive documentation from markdown files. To allow for
+     * deduplication and maintainability, each section has a comprehensive markdown file
+     * we require a strict format to adhere to discoverability of the documenation.
+     * Most notably, directive headers must be prefixed with "### " and suffixed with "=".
+     */
+    fn extract_directive_from_markdown(section_name: &str, directive_name: &str) -> Option<String> {
+        // Load the comprehensive markdown file for this section
+        let markdown_content = match section_name.to_lowercase().as_str() {
+            "unit" => Some(include_str!("../docs/unit.md")),
+            "service" => Some(include_str!("../docs/service.md")),
+            "socket" => Some(include_str!("../docs/socket.md")),
+            "timer" => Some(include_str!("../docs/timer.md")),
+            "install" => Some(include_str!("../docs/install.md")),
+            "mount" => Some(include_str!("../docs/mount.md")),
+            "path" => Some(include_str!("../docs/path.md")),
+            "swap" => Some(include_str!("../docs/swap.md")),
+            "container" => Some(include_str!("../docs/container.md")),
+            "pod" => Some(include_str!("../docs/pod.md")),
+            "volume" => Some(include_str!("../docs/volume.md")),
+            "network" => Some(include_str!("../docs/network.md")),
+            "kube" => Some(include_str!("../docs/kube.md")),
+            "build" => Some(include_str!("../docs/build.md")),
+            "image" => Some(include_str!("../docs/image.md")),
+            _ => None,
+        }?;
+
+        // Search for the directive header (### DirectiveName=)
+        let directive_header = format!("### {}=", directive_name);
+        let directive_header_lower = directive_header.to_lowercase();
+
+        let lines = markdown_content.lines();
+        let mut found_header = false;
+        let mut doc_lines = Vec::new();
+
+        for line in lines {
+            if line.to_lowercase() == directive_header_lower {
+                found_header = true;
+                continue;
+            }
+
+            if found_header {
+                // Stop at the next directive header (###) or section header (##)
+                if line.starts_with("### ") || line.starts_with("## ") {
+                    break;
+                }
+                doc_lines.push(line);
+            }
+        }
+
+        if doc_lines.is_empty() {
+            return None;
+        }
+
+        // Join the lines and trim
+        let documentation = doc_lines.join("\n").trim().to_string();
+
+        // Remove the trailing "**Reference:**" line if present
+        let documentation = if let Some(last_ref_pos) = documentation.rfind("**Reference:**") {
+            documentation[..last_ref_pos].trim().to_string()
+        } else {
+            documentation
+        };
+
+        Some(documentation)
+    }
+
+    // We also leverage the directive completion for auto complete and hover.
+    fn create_directive_completion(
+        section: &str,
+        key: &str,
+        short_description: &str,
+    ) -> CompletionItem {
+        // Try to get comprehensive markdown documentation
         let documentation =
-            Self::create_documentation(key, description, "systemd.service(5), systemd.unit(5)");
+            if let Some(markdown_doc) = Self::extract_directive_from_markdown(section, key) {
+                Documentation::MarkupContent(MarkupContent {
+                    kind: MarkupKind::Markdown,
+                    value: format!("**{}**\n\n{}", key, markdown_doc),
+                })
+            } else {
+                // Fall back to short description
+                Self::create_documentation(key, short_description, "systemd documentation")
+            };
 
         Self::create_completion_item(
             key.to_string(),
@@ -300,11 +387,73 @@ impl SystemdCompletion {
         )
     }
 
-    fn create_value_completion(directive: &str, value: &str) -> CompletionItem {
-        let documentation = Documentation::MarkupContent(MarkupContent {
-            kind: MarkupKind::Markdown,
-            value: format!("Valid `{}` option for `{}`", value, directive),
-        });
+    /* Extract value-specific documentation from the directive markdown. Similarly to directive
+     * being parsed from sections, we also use a format to find matches for value documentation.
+     * The prefix of "- **" is required, followed by the value name, and then either ":
+     * description".
+     */
+    fn extract_value_documentation(
+        section_name: &str,
+        directive_name: &str,
+        value: &str,
+    ) -> Option<String> {
+        // Get the full directive documentation
+        let directive_doc = Self::extract_directive_from_markdown(section_name, directive_name)?;
+
+        // Look for the value in bullet list format: - **value**: description
+        // or: - **value** (default): description
+        let value_lower = value.to_lowercase();
+
+        for line in directive_doc.lines() {
+            let line_trimmed = line.trim();
+            if !line_trimmed.starts_with("- **") {
+                continue;
+            }
+
+            // Extract the value name from the bullet: - **value**: or - **value** (default):
+            let after_bullets = line_trimmed.trim_start_matches("- **");
+
+            // Find where the value name ends (could be **: or ** or **:)
+            let value_end = after_bullets.find("**").unwrap_or(0);
+            if value_end == 0 {
+                continue;
+            }
+
+            let documented_value = &after_bullets[..value_end];
+
+            // Check if this matches our value (case-insensitive, ignoring (default) etc)
+            if documented_value.to_lowercase().starts_with(&value_lower)
+                || value_lower.starts_with(&documented_value.to_lowercase())
+            {
+                // Extract the description after the **: or ):
+                let rest = &after_bullets[value_end..];
+                if let Some(desc_start) = rest.find(':') {
+                    let description = rest[desc_start + 1..].trim();
+                    if !description.is_empty() {
+                        return Some(description.to_string());
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    // we want this for hover and autocomplete of values
+    fn create_value_completion(section: &str, directive: &str, value: &str) -> CompletionItem {
+        // Try to get value-specific documentation from markdown
+        let documentation =
+            if let Some(value_doc) = Self::extract_value_documentation(section, directive, value) {
+                Documentation::MarkupContent(MarkupContent {
+                    kind: MarkupKind::Markdown,
+                    value: format!("**{}**\n\n{}", value, value_doc),
+                })
+            } else {
+                Documentation::MarkupContent(MarkupContent {
+                    kind: MarkupKind::Markdown,
+                    value: format!("Valid `{}` option for `{}`", value, directive),
+                })
+            };
 
         Self::create_completion_item(
             value.to_string(),
@@ -333,15 +482,7 @@ impl SystemdCompletion {
         directive_name: &str,
         section_name: &str,
     ) -> Option<String> {
-        match (section_name, directive_name.to_lowercase().as_str()) {
-            ("Unit", "description") => {
-                Some(include_str!("../docs/directives/unit/description-detailed.txt").to_string())
-            }
-            ("Service", "type") => {
-                Some(include_str!("../docs/directives/service/type-detailed.txt").to_string())
-            }
-            _ => None,
-        }
+        Self::extract_directive_from_markdown(section_name, directive_name)
     }
 }
 
@@ -429,12 +570,12 @@ mod tests {
     #[test]
     fn test_create_directive_completion() {
         let completion =
-            SystemdCompletion::create_directive_completion("TestKey", "Test description");
+            SystemdCompletion::create_directive_completion("Service", "Type", "Test description");
 
-        assert_eq!(completion.label, "TestKey");
+        assert_eq!(completion.label, "Type");
         assert_eq!(completion.kind, Some(CompletionItemKind::PROPERTY));
         assert_eq!(completion.detail, Some("systemd directive".to_string()));
-        assert_eq!(completion.insert_text, Some("TestKey=".to_string()));
+        assert_eq!(completion.insert_text, Some("Type=".to_string()));
         assert!(completion.documentation.is_some());
     }
 
