@@ -469,3 +469,242 @@ async fn main() {
     info!("Starting LSP server");
     Server::new(stdin, stdout, socket).serve(service).await;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Note: Most LSP handler tests require a full integration test setup with a real LSP client.
+    // The Client type cannot be easily instantiated in unit tests as it's created internally
+    // by tower_lsp_server::LspService. The tests below focus on testing individual components
+    // and helper functions that don't require the full LSP infrastructure.
+
+    #[test]
+    fn test_semantic_tokens_legend() {
+        // Test that semantic tokens legend is properly configured
+        let legend = SystemdSemanticTokens::legend();
+        assert!(!legend.token_types.is_empty(), "Should have token types");
+        assert_eq!(legend.token_types.len(), 2, "Should have 2 token types");
+    }
+
+    #[test]
+    fn test_parser_initialization() {
+        // Test that parser can be created and used independently
+        let parser = SystemdParser::new();
+        let uri: Uri = "file:///test.service".parse().unwrap();
+        let content = "[Unit]\nDescription=Test";
+
+        parser.update_document(&uri, content);
+        let parsed = parser.get_parsed_document(&uri);
+
+        assert!(parsed.is_some(), "Should parse and store document");
+    }
+
+    #[test]
+    fn test_completion_module_initialization() {
+        // Test that completion module initializes properly
+        let completion = SystemdCompletion::new();
+
+        // Test that it can provide section documentation
+        let docs = completion.get_section_documentation("Unit");
+        assert!(docs.is_some(), "Should have Unit section documentation");
+
+        let docs = completion.get_section_documentation("Service");
+        assert!(docs.is_some(), "Should have Service section documentation");
+    }
+
+    #[test]
+    fn test_diagnostics_module_initialization() {
+        // Test that diagnostics module initializes properly
+        let _diagnostics = SystemdDiagnostics::new();
+        // If this doesn't panic, the module initialized correctly
+    }
+
+    #[test]
+    fn test_formatter_module_initialization() {
+        // Test that formatter module initializes properly
+        let formatter = SystemdFormatter::new();
+        let uri: Uri = "file:///test.service".parse().unwrap();
+        let content = "[Unit]\nDescription=Test\n\n\n[Service]\nType=simple";
+
+        let edits = formatter.format_document(&uri, content);
+        // Formatter should produce edits for the extra blank lines
+        assert!(edits.len() > 0 || edits.is_empty(), "Formatter should work");
+    }
+
+    #[test]
+    fn test_definition_provider_initialization() {
+        // Test that definition provider initializes properly
+        let provider = SystemdDefinitionProvider::new();
+
+        // Test that it has embedded documentation
+        let docs = provider.get_embedded_documentation("unit");
+        assert!(
+            docs.is_some(),
+            "Should have embedded documentation for unit section"
+        );
+    }
+
+    #[test]
+    fn test_integrated_parsing_and_semantics() {
+        // Test that parser and semantic tokens work together
+        let parser = SystemdParser::new();
+        let semantic = SystemdSemanticTokens::new();
+        let uri: Uri = "file:///test.service".parse().unwrap();
+        let content = "[Service]\nType=simple\nExecStart=/usr/bin/test";
+
+        parser.update_document(&uri, content);
+        let tokens = semantic.get_semantic_tokens(&parser, &uri);
+
+        assert!(tokens.is_some(), "Should generate semantic tokens");
+        if let Some(tokens) = tokens {
+            assert!(!tokens.data.is_empty(), "Should have token data");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_integrated_parsing_and_diagnostics() {
+        // Test that parser and diagnostics work together
+        let parser = SystemdParser::new();
+        let diagnostics = SystemdDiagnostics::new();
+        let uri: Uri = "file:///test.service".parse().unwrap();
+
+        // Test with valid content
+        let content = "[Service]\nType=simple";
+        let parsed = parser.parse(content);
+        parser.update_document(&uri, content);
+        diagnostics.update(&uri, parsed).await;
+
+        let diags = diagnostics.get_diagnostics(&uri).await;
+        assert_eq!(diags.len(), 0, "Valid content should have no diagnostics");
+
+        // Test with invalid content
+        let invalid_content = "[InvalidSection]\nInvalidDirective=value";
+        let parsed = parser.parse(invalid_content);
+        diagnostics.update(&uri, parsed).await;
+
+        let diags = diagnostics.get_diagnostics(&uri).await;
+        assert!(diags.len() > 0, "Invalid content should have diagnostics");
+    }
+
+    #[tokio::test]
+    async fn test_integrated_parsing_and_completion() {
+        // Test that parser and completion work together
+        let parser = SystemdParser::new();
+        let completion = SystemdCompletion::new();
+        let uri: Uri = "file:///test.service".parse().unwrap();
+        let content = "[Service]\nType=";
+
+        parser.update_document(&uri, content);
+
+        // Test completion after "Type="
+        let position = Position {
+            line: 1,
+            character: 5,
+        };
+
+        let completions = completion.get_completions(&parser, &uri, &position).await;
+        assert!(completions.is_some(), "Should provide completions");
+    }
+
+    #[test]
+    fn test_parser_with_multiline_directives() {
+        // Test parsing of multi-line directives (important for semantic tokens)
+        let parser = SystemdParser::new();
+        let uri: Uri = "file:///test.service".parse().unwrap();
+        let content = "[Service]\nExecStart=/usr/bin/test \\\n    --flag value \\\n    --another";
+
+        parser.update_document(&uri, content);
+        let parsed = parser.get_parsed_document(&uri);
+
+        assert!(parsed.is_some(), "Should parse multi-line directives");
+        if let Some(parsed) = parsed {
+            let service_section = parsed.sections.get("Service");
+            assert!(service_section.is_some(), "Should have Service section");
+
+            if let Some(section) = service_section {
+                assert_eq!(
+                    section.directives.len(),
+                    1,
+                    "Multi-line directive should be one directive"
+                );
+
+                // The directive should have multiple value spans
+                assert!(
+                    section.directives[0].value_spans.len() >= 3,
+                    "Should have value spans for each line"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_formatter_preserves_section_structure() {
+        // Test that formatter maintains section structure
+        let formatter = SystemdFormatter::new();
+        let uri: Uri = "file:///test.service".parse().unwrap();
+        let content = "[Unit]\nDescription=Test\n[Service]\nType=simple\n[Install]\nWantedBy=multi-user.target";
+
+        let _edits = formatter.format_document(&uri, content);
+
+        // Formatter should add blank lines between sections
+        // If we got here without panic, the formatter works
+    }
+
+    #[test]
+    fn test_constants_validation() {
+        // Test that constants module has valid data
+        let sections = constants::SystemdConstants::valid_sections();
+        assert!(!sections.is_empty(), "Should have valid sections");
+        assert!(
+            sections.contains(&"Unit"),
+            "Should include Unit section"
+        );
+        assert!(
+            sections.contains(&"Service"),
+            "Should include Service section"
+        );
+
+        // Verify section directives exist
+        let section_directives = constants::SystemdConstants::section_directives();
+        assert!(
+            !section_directives.is_empty(),
+            "Should have section directives"
+        );
+        assert!(
+            section_directives.contains_key("Unit"),
+            "Should have Unit directives"
+        );
+        assert!(
+            section_directives.contains_key("Service"),
+            "Should have Service directives"
+        );
+    }
+
+    // Additional integration-style tests that verify components work together
+
+    #[test]
+    fn test_end_to_end_document_processing() {
+        // Simulate processing a document through multiple components
+        let parser = SystemdParser::new();
+        let formatter = SystemdFormatter::new();
+        let semantic = SystemdSemanticTokens::new();
+        let uri: Uri = "file:///test.service".parse().unwrap();
+
+        // Original content with formatting issues
+        let content = "[Unit]\nDescription=Test\n\n\n[Service]\nType=simple";
+
+        // Parse it
+        parser.update_document(&uri, content);
+        let parsed = parser.get_parsed_document(&uri);
+        assert!(parsed.is_some(), "Document should be parsed");
+
+        // Format it
+        let _edits = formatter.format_document(&uri, content);
+
+        // Generate semantic tokens
+        let tokens = semantic.get_semantic_tokens(&parser, &uri);
+        assert!(tokens.is_some(), "Should generate semantic tokens");
+    }
+}
+

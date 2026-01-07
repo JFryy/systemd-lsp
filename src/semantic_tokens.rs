@@ -196,4 +196,207 @@ mod tests {
 
         result
     }
+
+    #[test]
+    fn test_empty_document() {
+        let parser = SystemdParser::new();
+        let uri = "file:///test.service".parse::<Uri>().unwrap();
+        let content = "";
+
+        parser.update_document(&uri, content);
+        let semantic = SystemdSemanticTokens::new();
+        let tokens = semantic
+            .get_semantic_tokens(&parser, &uri)
+            .expect("semantic tokens");
+
+        assert_eq!(tokens.data.len(), 0);
+    }
+
+    #[test]
+    fn test_document_with_only_sections() {
+        let parser = SystemdParser::new();
+        let uri = "file:///test.service".parse::<Uri>().unwrap();
+        let content = "[Unit]\n[Service]\n[Install]";
+
+        parser.update_document(&uri, content);
+        let semantic = SystemdSemanticTokens::new();
+        let tokens = semantic
+            .get_semantic_tokens(&parser, &uri)
+            .expect("semantic tokens");
+
+        // No directives, so no tokens
+        assert_eq!(tokens.data.len(), 0);
+    }
+
+    #[test]
+    fn test_document_with_only_comments() {
+        let parser = SystemdParser::new();
+        let uri = "file:///test.service".parse::<Uri>().unwrap();
+        let content = "# This is a comment\n# Another comment\n";
+
+        parser.update_document(&uri, content);
+        let semantic = SystemdSemanticTokens::new();
+        let tokens = semantic
+            .get_semantic_tokens(&parser, &uri)
+            .expect("semantic tokens");
+
+        // Comments are not tokenized
+        assert_eq!(tokens.data.len(), 0);
+    }
+
+    #[test]
+    fn test_single_directive() {
+        let parser = SystemdParser::new();
+        let uri = "file:///test.service".parse::<Uri>().unwrap();
+        let content = "[Service]\nDescription=Test Service";
+
+        parser.update_document(&uri, content);
+        let semantic = SystemdSemanticTokens::new();
+        let tokens = semantic
+            .get_semantic_tokens(&parser, &uri)
+            .expect("semantic tokens");
+
+        let decoded = decode_tokens(&tokens.data);
+        assert_eq!(decoded.len(), 2); // One for key, one for value
+
+        // Check directive key token
+        assert_eq!(decoded[0].line, 1);
+        assert_eq!(decoded[0].token_type, TOKEN_TYPE_KEYWORD);
+        assert_eq!(decoded[0].length, 11); // "Description"
+
+        // Check directive value token
+        assert_eq!(decoded[1].line, 1);
+        assert_eq!(decoded[1].token_type, TOKEN_TYPE_STRING);
+        assert_eq!(decoded[1].length, 12); // "Test Service"
+    }
+
+    #[test]
+    fn test_multiple_directives_same_section() {
+        let parser = SystemdParser::new();
+        let uri = "file:///test.service".parse::<Uri>().unwrap();
+        let content = "[Service]\nType=simple\nExecStart=/bin/test\nRestart=always";
+
+        parser.update_document(&uri, content);
+        let semantic = SystemdSemanticTokens::new();
+        let tokens = semantic
+            .get_semantic_tokens(&parser, &uri)
+            .expect("semantic tokens");
+
+        let decoded = decode_tokens(&tokens.data);
+        assert_eq!(decoded.len(), 6); // 3 directives × 2 tokens each
+
+        // Verify token types alternate between keyword and string
+        assert_eq!(decoded[0].token_type, TOKEN_TYPE_KEYWORD); // Type
+        assert_eq!(decoded[1].token_type, TOKEN_TYPE_STRING); // simple
+        assert_eq!(decoded[2].token_type, TOKEN_TYPE_KEYWORD); // ExecStart
+        assert_eq!(decoded[3].token_type, TOKEN_TYPE_STRING); // /bin/test
+        assert_eq!(decoded[4].token_type, TOKEN_TYPE_KEYWORD); // Restart
+        assert_eq!(decoded[5].token_type, TOKEN_TYPE_STRING); // always
+    }
+
+    #[test]
+    fn test_tokens_are_sorted_by_position() {
+        let parser = SystemdParser::new();
+        let uri = "file:///test.service".parse::<Uri>().unwrap();
+        let content = "[Unit]\nDescription=Test\n\n[Service]\nType=simple";
+
+        parser.update_document(&uri, content);
+        let semantic = SystemdSemanticTokens::new();
+        let tokens = semantic
+            .get_semantic_tokens(&parser, &uri)
+            .expect("semantic tokens");
+
+        let decoded = decode_tokens(&tokens.data);
+
+        // Verify tokens are in ascending order by line
+        for i in 1..decoded.len() {
+            assert!(
+                decoded[i].line >= decoded[i - 1].line,
+                "Tokens should be sorted by line number"
+            );
+            if decoded[i].line == decoded[i - 1].line {
+                assert!(
+                    decoded[i].start >= decoded[i - 1].start,
+                    "Tokens on same line should be sorted by start position"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_directive_with_empty_value() {
+        let parser = SystemdParser::new();
+        let uri = "file:///test.service".parse::<Uri>().unwrap();
+        let content = "[Service]\nExecStart=";
+
+        parser.update_document(&uri, content);
+        let semantic = SystemdSemanticTokens::new();
+        let tokens = semantic
+            .get_semantic_tokens(&parser, &uri)
+            .expect("semantic tokens");
+
+        let decoded = decode_tokens(&tokens.data);
+        // Should have token for key, but no token for empty value
+        let keyword_tokens: Vec<_> = decoded
+            .iter()
+            .filter(|t| t.token_type == TOKEN_TYPE_KEYWORD)
+            .collect();
+
+        assert_eq!(keyword_tokens.len(), 1);
+        assert_eq!(keyword_tokens[0].length, 9); // "ExecStart"
+    }
+
+    #[test]
+    fn test_document_not_found() {
+        let parser = SystemdParser::new();
+        let uri = "file:///nonexistent.service".parse::<Uri>().unwrap();
+        let semantic = SystemdSemanticTokens::new();
+        let tokens = semantic.get_semantic_tokens(&parser, &uri);
+
+        assert!(tokens.is_none(), "Should return None for non-existent document");
+    }
+
+    #[test]
+    fn test_multiple_sections_with_directives() {
+        let parser = SystemdParser::new();
+        let uri = "file:///test.service".parse::<Uri>().unwrap();
+        let content = "[Unit]\nDescription=Test\n\n[Service]\nType=simple\n\n[Install]\nWantedBy=multi-user.target";
+
+        parser.update_document(&uri, content);
+        let semantic = SystemdSemanticTokens::new();
+        let tokens = semantic
+            .get_semantic_tokens(&parser, &uri)
+            .expect("semantic tokens");
+
+        let decoded = decode_tokens(&tokens.data);
+        assert_eq!(decoded.len(), 6); // 3 directives × 2 tokens each
+
+        // Verify tokens span across multiple sections
+        let lines: Vec<_> = decoded.iter().map(|t| t.line).collect();
+        assert!(lines.contains(&1)); // Unit section (Description on line 1)
+        assert!(lines.contains(&4)); // Service section (Type on line 4)
+        assert!(lines.contains(&7)); // Install section (WantedBy on line 7)
+    }
+
+    #[test]
+    fn test_token_delta_encoding() {
+        let parser = SystemdParser::new();
+        let uri = "file:///test.service".parse::<Uri>().unwrap();
+        let content = "[Service]\nType=simple\nExecStart=/bin/test";
+
+        parser.update_document(&uri, content);
+        let semantic = SystemdSemanticTokens::new();
+        let tokens = semantic
+            .get_semantic_tokens(&parser, &uri)
+            .expect("semantic tokens");
+
+        // First token should have absolute position
+        assert_eq!(tokens.data[0].delta_line, 1); // Line 1
+
+        // Second token on same line should have delta_line = 0
+        assert_eq!(tokens.data[1].delta_line, 0);
+
+        // Third token on next line should have delta_line = 1
+        assert_eq!(tokens.data[2].delta_line, 1);
+    }
 }
