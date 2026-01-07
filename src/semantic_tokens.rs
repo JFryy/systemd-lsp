@@ -353,7 +353,10 @@ mod tests {
         let semantic = SystemdSemanticTokens::new();
         let tokens = semantic.get_semantic_tokens(&parser, &uri);
 
-        assert!(tokens.is_none(), "Should return None for non-existent document");
+        assert!(
+            tokens.is_none(),
+            "Should return None for non-existent document"
+        );
     }
 
     #[test]

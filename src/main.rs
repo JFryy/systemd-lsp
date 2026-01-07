@@ -1,6 +1,8 @@
+use clap::Parser;
 use log::{debug, info, trace};
 use std::env;
 use std::io::IsTerminal;
+use std::path::{Path, PathBuf};
 use tower_lsp_server::jsonrpc::Result;
 use tower_lsp_server::lsp_types::*;
 use tower_lsp_server::{Client, LanguageServer, LspService, Server};
@@ -389,6 +391,165 @@ impl SystemdLanguageServer {
     }
 }
 
+/// CLI arguments for systemd-lsp
+#[derive(Parser, Debug)]
+#[command(name = "systemd-lsp")]
+#[command(
+    author,
+    version,
+    about = "Language Server Protocol implementation for systemd unit files"
+)]
+#[command(
+    long_about = "Language server for systemd unit files covering diagnostic, formatting, and autocomplete functionality w/ documentation.\n\n\
+When run in a terminal with file paths, it validates systemd unit files and reports diagnostics.\n\
+When run without a TTY (from an editor), it operates as an LSP server."
+)]
+struct Cli {
+    /// Files or directories to validate (supports .service, .socket, .timer, .target, .mount, .automount, .swap, .path, .slice, .scope)
+    #[arg(value_name = "PATH", required = true)]
+    paths: Vec<PathBuf>,
+
+    /// Recursively search directories for systemd unit files
+    #[arg(
+        short,
+        long,
+        help = "Recursively validate all systemd unit files in directories"
+    )]
+    recursive: bool,
+}
+
+/// Collect systemd unit files from the given paths
+fn collect_files(paths: &[PathBuf], recursive: bool) -> std::io::Result<Vec<PathBuf>> {
+    let mut files = Vec::new();
+
+    for path in paths {
+        if path.is_file() {
+            // Check if it looks like a systemd unit file
+            if is_systemd_file(path) {
+                files.push(path.clone());
+            }
+        } else if path.is_dir() {
+            if recursive {
+                // Walk directory recursively
+                for entry in std::fs::read_dir(path)? {
+                    let entry = entry?;
+                    let entry_path = entry.path();
+                    if entry_path.is_file() && is_systemd_file(&entry_path) {
+                        files.push(entry_path);
+                    } else if entry_path.is_dir() {
+                        // Recursively collect from subdirectories
+                        files.extend(collect_files(&[entry_path], true)?);
+                    }
+                }
+            } else {
+                // Only check files in this directory
+                for entry in std::fs::read_dir(path)? {
+                    let entry = entry?;
+                    let entry_path = entry.path();
+                    if entry_path.is_file() && is_systemd_file(&entry_path) {
+                        files.push(entry_path);
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(files)
+}
+
+/// Check if a file is a systemd unit file based on extension
+fn is_systemd_file(path: &Path) -> bool {
+    if let Some(ext) = path.extension() {
+        matches!(
+            ext.to_str().unwrap_or(""),
+            "service"
+                | "socket"
+                | "timer"
+                | "target"
+                | "mount"
+                | "automount"
+                | "swap"
+                | "path"
+                | "slice"
+                | "scope"
+        )
+    } else {
+        false
+    }
+}
+
+/// Run diagnostics on files in CLI mode
+async fn run_cli_diagnostics(paths: Vec<PathBuf>, recursive: bool) -> std::io::Result<i32> {
+    let files = collect_files(&paths, recursive)?;
+
+    if files.is_empty() {
+        eprintln!("No systemd unit files found");
+        return Ok(1);
+    }
+
+    let parser = SystemdParser::new();
+    let diagnostics_engine = SystemdDiagnostics::new();
+    let mut total_issues = 0;
+    let mut files_with_issues = 0;
+
+    for file_path in &files {
+        let content = match std::fs::read_to_string(file_path) {
+            Ok(content) => content,
+            Err(e) => {
+                eprintln!("Error reading {}: {}", file_path.display(), e);
+                continue;
+            }
+        };
+
+        let uri = format!("file://{}", file_path.display())
+            .parse::<Uri>()
+            .unwrap();
+
+        let parsed = parser.parse(&content);
+        diagnostics_engine.update(&uri, parsed).await;
+        let diags = diagnostics_engine.get_diagnostics(&uri).await;
+
+        if !diags.is_empty() {
+            files_with_issues += 1;
+            total_issues += diags.len();
+
+            println!("\n{}:", file_path.display());
+            for diag in diags {
+                let severity = match diag.severity {
+                    Some(DiagnosticSeverity::ERROR) => "error",
+                    Some(DiagnosticSeverity::WARNING) => "warning",
+                    Some(DiagnosticSeverity::INFORMATION) => "info",
+                    Some(DiagnosticSeverity::HINT) => "hint",
+                    _ => "unknown",
+                };
+
+                println!(
+                    "  {}:{}:{}: {}: {}",
+                    file_path.display(),
+                    diag.range.start.line + 1,
+                    diag.range.start.character + 1,
+                    severity,
+                    diag.message
+                );
+            }
+        }
+    }
+
+    println!();
+    if total_issues == 0 {
+        println!("✓ All {} files are valid", files.len());
+        Ok(0)
+    } else {
+        println!(
+            "✗ Found {} issue(s) in {} file(s) out of {} total",
+            total_issues,
+            files_with_issues,
+            files.len()
+        );
+        Ok(1)
+    }
+}
+
 fn setup_logging() {
     let is_tty = std::io::stdin().is_terminal() || std::io::stdout().is_terminal();
     if is_tty {
@@ -430,44 +591,37 @@ fn setup_logging() {
 
 #[tokio::main]
 async fn main() {
-    if std::env::args().any(|arg| arg == "--version" || arg == "-V") {
-        println!("systemdls {}", env!("CARGO_PKG_VERSION"));
-        std::process::exit(0);
-    }
-
-    setup_logging();
-
     let is_tty = std::io::stdin().is_terminal() || std::io::stdout().is_terminal();
 
     if is_tty {
-        // Terminal mode - show help and exit
-        println!("systemdls - Language Server for systemd unit files");
-        println!();
-        println!("USAGE:");
-        println!("    systemdls [OPTIONS]");
-        println!();
-        println!("This is a Language Server Protocol (LSP) implementation for systemd unit files.");
-        println!("It should be run by your editor/IDE via LSP, not directly from the terminal.");
-        println!();
-        println!("ENVIRONMENT VARIABLES:");
-        println!("    SYSTEMDLS_LOG_LEVEL    Set log level (error, warn, info, debug, trace)");
-        println!();
-        return;
+        // Terminal mode - parse CLI arguments and run diagnostics
+        let cli = Cli::parse();
+
+        // Run CLI diagnostics mode
+        match run_cli_diagnostics(cli.paths, cli.recursive).await {
+            Ok(exit_code) => std::process::exit(exit_code),
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+    } else {
+        // LSP server mode
+        setup_logging();
+        info!("Initializing systemd language server components");
+
+        let stdin = tokio::io::stdin();
+        let stdout = tokio::io::stdout();
+
+        debug!("Creating LSP service");
+        let (service, socket) = LspService::new(|client| {
+            info!("Creating new SystemdLanguageServer instance");
+            SystemdLanguageServer::new(client)
+        });
+
+        info!("Starting LSP server");
+        Server::new(stdin, stdout, socket).serve(service).await;
     }
-
-    info!("Initializing systemd language server components");
-
-    let stdin = tokio::io::stdin();
-    let stdout = tokio::io::stdout();
-
-    debug!("Creating LSP service");
-    let (service, socket) = LspService::new(|client| {
-        info!("Creating new SystemdLanguageServer instance");
-        SystemdLanguageServer::new(client)
-    });
-
-    info!("Starting LSP server");
-    Server::new(stdin, stdout, socket).serve(service).await;
 }
 
 #[cfg(test)]
@@ -656,10 +810,7 @@ mod tests {
         // Test that constants module has valid data
         let sections = constants::SystemdConstants::valid_sections();
         assert!(!sections.is_empty(), "Should have valid sections");
-        assert!(
-            sections.contains(&"Unit"),
-            "Should include Unit section"
-        );
+        assert!(sections.contains(&"Unit"), "Should include Unit section");
         assert!(
             sections.contains(&"Service"),
             "Should include Service section"
@@ -707,4 +858,3 @@ mod tests {
         assert!(tokens.is_some(), "Should generate semantic tokens");
     }
 }
-
