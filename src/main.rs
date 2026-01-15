@@ -420,7 +420,27 @@ struct Cli {
 
 /// Collect systemd unit files from the given paths
 fn collect_files(paths: &[PathBuf], recursive: bool) -> std::io::Result<Vec<PathBuf>> {
+    // Read max depth once from environment variable
+    let max_depth: u32 = match std::env::var("SYSTEMD_LSP_MAX_DEPTH") {
+        Ok(val) => val.parse().unwrap_or(20),
+        Err(_) => 20,
+    };
+    collect_files_recursive(paths, recursive, 0, max_depth)
+}
+
+/// Collect systemd unit files with depth tracking
+fn collect_files_recursive(
+    paths: &[PathBuf],
+    recursive: bool,
+    depth: u32,
+    max_depth: u32,
+) -> std::io::Result<Vec<PathBuf>> {
     let mut files = Vec::new();
+
+    // Stop if we've recursed too deep
+    if depth > max_depth {
+        return Ok(files);
+    }
 
     for path in paths {
         if path.is_file() {
@@ -437,8 +457,8 @@ fn collect_files(paths: &[PathBuf], recursive: bool) -> std::io::Result<Vec<Path
                     if entry_path.is_file() && is_systemd_file(&entry_path) {
                         files.push(entry_path);
                     } else if entry_path.is_dir() {
-                        // Recursively collect from subdirectories
-                        files.extend(collect_files(&[entry_path], true)?);
+                        // Recursively collect from subdirectories with incremented depth
+                        files.extend(collect_files_recursive(&[entry_path], true, depth + 1, max_depth)?);
                     }
                 }
             } else {
@@ -489,7 +509,8 @@ async fn run_cli_diagnostics(paths: Vec<PathBuf>, recursive: bool) -> std::io::R
 
     let parser = SystemdParser::new();
     let diagnostics_engine = SystemdDiagnostics::new();
-    let mut total_issues = 0;
+    let mut total_errors = 0;
+    let mut total_warnings = 0;
     let mut files_with_issues = 0;
 
     for file_path in &files {
@@ -511,16 +532,24 @@ async fn run_cli_diagnostics(paths: Vec<PathBuf>, recursive: bool) -> std::io::R
 
         if !diags.is_empty() {
             files_with_issues += 1;
-            total_issues += diags.len();
 
             println!("\n{}:", file_path.display());
-            for diag in diags {
+            for diag in &diags {
                 let severity = match diag.severity {
-                    Some(DiagnosticSeverity::ERROR) => "error",
-                    Some(DiagnosticSeverity::WARNING) => "warning",
+                    Some(DiagnosticSeverity::ERROR) => {
+                        total_errors += 1;
+                        "error"
+                    }
+                    Some(DiagnosticSeverity::WARNING) => {
+                        total_warnings += 1;
+                        "warning"
+                    }
                     Some(DiagnosticSeverity::INFORMATION) => "info",
                     Some(DiagnosticSeverity::HINT) => "hint",
-                    _ => "unknown",
+                    _ => {
+                        total_errors += 1; // Treat unknown severity as error
+                        "unknown"
+                    }
                 };
 
                 println!(
@@ -536,17 +565,27 @@ async fn run_cli_diagnostics(paths: Vec<PathBuf>, recursive: bool) -> std::io::R
     }
 
     println!();
-    if total_issues == 0 {
+    if total_errors == 0 && total_warnings == 0 {
         println!("✓ All {} files are valid", files.len());
         Ok(0)
-    } else {
+    } else if total_errors > 0 {
         println!(
-            "✗ Found {} issue(s) in {} file(s) out of {} total",
-            total_issues,
+            "✗ Found {} error(s) and {} warning(s) in {} file(s) out of {} total",
+            total_errors,
+            total_warnings,
             files_with_issues,
             files.len()
         );
         Ok(1)
+    } else {
+        // Only warnings, no errors
+        println!(
+            "⚠ Found {} warning(s) in {} file(s) out of {} total",
+            total_warnings,
+            files_with_issues,
+            files.len()
+        );
+        Ok(0)
     }
 }
 

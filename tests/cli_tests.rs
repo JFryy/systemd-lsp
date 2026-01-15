@@ -149,6 +149,24 @@ fn test_cli_nonexistent_file() {
 }
 
 #[test]
+fn test_cli_warnings_only() {
+    let (stdout, _stderr, exit_code) = run_systemd_lsp(&["examples/warnings-only.service"]);
+
+    // Should exit with code 0 (warnings don't fail)
+    assert_eq!(exit_code, 0, "Expected exit code 0 for warnings only");
+
+    // Should show warning indicator
+    assert!(stdout.contains("⚠"), "Should show warning indicator");
+    assert!(
+        stdout.contains("warning"),
+        "Should mention warnings"
+    );
+
+    // Should not show error indicator
+    assert!(!stdout.contains("✗"), "Should not show error indicator");
+}
+
+#[test]
 fn test_cli_directory_non_recursive() {
     let (stdout, _stderr, exit_code) = run_systemd_lsp(&["examples"]);
 
@@ -188,7 +206,7 @@ fn test_expected_error_count() {
         .filter(|line| line.contains("error") || line.contains("warning") || line.contains("unknown"))
         .collect();
 
-    // We expect 9 diagnostics total (7 errors + 2 warnings + 1 unknown section)
+    // We expect 9 diagnostics total (7 errors + 2 warnings)
     // This is a regression test - if this number changes, it might indicate
     // a change in diagnostic behavior
     assert!(
@@ -196,6 +214,12 @@ fn test_expected_error_count() {
         "Expected at least 9 diagnostics, found {}. Diagnostics:\n{}",
         diagnostic_lines.len(),
         diagnostic_lines.join("\n")
+    );
+
+    // Verify the summary shows both errors and warnings
+    assert!(
+        stdout.contains("7 error(s)") && stdout.contains("2 warning(s)"),
+        "Summary should show 7 errors and 2 warnings"
     );
 }
 
