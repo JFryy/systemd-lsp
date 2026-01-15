@@ -77,6 +77,26 @@ impl SystemdDefinitionProvider {
             "image".to_string(),
             include_str!("../docs/image.md").to_string(),
         );
+        documentation.insert(
+            "automount".to_string(),
+            include_str!("../docs/sections/automount.txt").to_string(),
+        );
+        documentation.insert(
+            "device".to_string(),
+            include_str!("../docs/sections/device.txt").to_string(),
+        );
+        documentation.insert(
+            "slice".to_string(),
+            include_str!("../docs/sections/slice.txt").to_string(),
+        );
+        documentation.insert(
+            "scope".to_string(),
+            include_str!("../docs/sections/scope.txt").to_string(),
+        );
+        documentation.insert(
+            "target".to_string(),
+            include_str!("../docs/sections/target.txt").to_string(),
+        );
 
         // Create a single shared temp file for all documentation
         let shared_temp_file = if let Ok(temp_dir) = std::env::temp_dir().canonicalize() {
