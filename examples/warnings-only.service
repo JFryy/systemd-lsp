@@ -1,0 +1,13 @@
+# Test file with only warnings (unknown directives)
+
+[Unit]
+Description=Test with only warnings
+UnknownDirective=value
+
+[Service]
+Type=simple
+ExecStart=/bin/true
+AnotherUnknownDirective=test
+
+[Install]
+WantedBy=multi-user.target

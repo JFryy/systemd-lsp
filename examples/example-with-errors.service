@@ -1,15 +1,30 @@
 # Example systemd service file with intentional errors
 # This file can be used to test the diagnostic capabilities of the LSP
+#
+# Expected diagnostics:
+# Line 9:  ERROR - Invalid Type value 'invalid-type'
+# Line 10: ERROR - ExecStart cannot be empty
+# Line 11: ERROR - Invalid Restart value 'unknown-policy'
+# Line 12: WARNING - Unknown directive 'InvalidDirective' in [Service] section
+# Line 13: ERROR - Invalid ProtectSystem value 'invalid'
+# Line 14: ERROR - Invalid StandardOutput value 'invalid-stream'
+# Line 15: ERROR - Invalid NotifyAccess value 'invalid-access'
+# Line 17: ERROR - Unknown section: [UnknownSection]
+# Line 20: WARNING - Unknown directive 'AnotherBadDirective' in [Unit] section
 
 [Unit]
 Description=Service with validation errors
 After=network.target
+AnotherBadDirective=test-value
 
 [Service]
 Type=invalid-type
 ExecStart=
 Restart=unknown-policy
 InvalidDirective=some-value
+ProtectSystem=invalid
+StandardOutput=invalid-stream
+NotifyAccess=invalid-access
 
 [UnknownSection]
 SomeDirective=value

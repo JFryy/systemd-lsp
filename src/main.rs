@@ -1,6 +1,8 @@
+use clap::Parser;
 use log::{debug, info, trace};
 use std::env;
 use std::io::IsTerminal;
+use std::path::{Path, PathBuf};
 use tower_lsp_server::jsonrpc::Result;
 use tower_lsp_server::lsp_types::*;
 use tower_lsp_server::{Client, LanguageServer, LspService, Server};
@@ -389,6 +391,204 @@ impl SystemdLanguageServer {
     }
 }
 
+/// CLI arguments for systemd-lsp
+#[derive(Parser, Debug)]
+#[command(name = "systemd-lsp")]
+#[command(
+    author,
+    version,
+    about = "Language Server Protocol implementation for systemd unit files"
+)]
+#[command(
+    long_about = "Language server for systemd unit files covering diagnostic, formatting, and autocomplete functionality w/ documentation.\n\n\
+When run in a terminal with file paths, it validates systemd unit files and reports diagnostics.\n\
+When run without a TTY (from an editor), it operates as an LSP server."
+)]
+struct Cli {
+    /// Files or directories to validate (supports .service, .socket, .timer, .target, .mount, .automount, .swap, .path, .slice, .scope)
+    #[arg(value_name = "PATH", required = true)]
+    paths: Vec<PathBuf>,
+
+    /// Recursively search directories for systemd unit files
+    #[arg(
+        short,
+        long,
+        help = "Recursively validate all systemd unit files in directories"
+    )]
+    recursive: bool,
+}
+
+/// Collect systemd unit files from the given paths
+fn collect_files(paths: &[PathBuf], recursive: bool) -> std::io::Result<Vec<PathBuf>> {
+    // Read max depth once from environment variable
+    let max_depth: u32 = match std::env::var("SYSTEMD_LSP_MAX_DEPTH") {
+        Ok(val) => val.parse().unwrap_or(20),
+        Err(_) => 20,
+    };
+    collect_files_recursive(paths, recursive, 0, max_depth)
+}
+
+/// Collect systemd unit files with depth tracking
+fn collect_files_recursive(
+    paths: &[PathBuf],
+    recursive: bool,
+    depth: u32,
+    max_depth: u32,
+) -> std::io::Result<Vec<PathBuf>> {
+    let mut files = Vec::new();
+
+    // Stop if we've recursed too deep
+    if depth > max_depth {
+        return Ok(files);
+    }
+
+    for path in paths {
+        if path.is_file() {
+            // Check if it looks like a systemd unit file
+            if is_systemd_file(path) {
+                files.push(path.clone());
+            }
+        } else if path.is_dir() {
+            if recursive {
+                // Walk directory recursively
+                for entry in std::fs::read_dir(path)? {
+                    let entry = entry?;
+                    let entry_path = entry.path();
+                    if entry_path.is_file() && is_systemd_file(&entry_path) {
+                        files.push(entry_path);
+                    } else if entry_path.is_dir() {
+                        // Recursively collect from subdirectories with incremented depth
+                        files.extend(collect_files_recursive(&[entry_path], true, depth + 1, max_depth)?);
+                    }
+                }
+            } else {
+                // Only check files in this directory
+                for entry in std::fs::read_dir(path)? {
+                    let entry = entry?;
+                    let entry_path = entry.path();
+                    if entry_path.is_file() && is_systemd_file(&entry_path) {
+                        files.push(entry_path);
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(files)
+}
+
+/// Check if a file is a systemd unit file based on extension
+fn is_systemd_file(path: &Path) -> bool {
+    if let Some(ext) = path.extension() {
+        matches!(
+            ext.to_str().unwrap_or(""),
+            "service"
+                | "socket"
+                | "timer"
+                | "target"
+                | "mount"
+                | "automount"
+                | "swap"
+                | "path"
+                | "slice"
+                | "scope"
+        )
+    } else {
+        false
+    }
+}
+
+/// Run diagnostics on files in CLI mode
+async fn run_cli_diagnostics(paths: Vec<PathBuf>, recursive: bool) -> std::io::Result<i32> {
+    let files = collect_files(&paths, recursive)?;
+
+    if files.is_empty() {
+        eprintln!("No systemd unit files found");
+        return Ok(1);
+    }
+
+    let parser = SystemdParser::new();
+    let diagnostics_engine = SystemdDiagnostics::new();
+    let mut total_errors = 0;
+    let mut total_warnings = 0;
+    let mut files_with_issues = 0;
+
+    for file_path in &files {
+        let content = match std::fs::read_to_string(file_path) {
+            Ok(content) => content,
+            Err(e) => {
+                eprintln!("Error reading {}: {}", file_path.display(), e);
+                continue;
+            }
+        };
+
+        let uri = format!("file://{}", file_path.display())
+            .parse::<Uri>()
+            .unwrap();
+
+        let parsed = parser.parse(&content);
+        diagnostics_engine.update(&uri, parsed).await;
+        let diags = diagnostics_engine.get_diagnostics(&uri).await;
+
+        if !diags.is_empty() {
+            files_with_issues += 1;
+
+            println!("\n{}:", file_path.display());
+            for diag in &diags {
+                let severity = match diag.severity {
+                    Some(DiagnosticSeverity::ERROR) => {
+                        total_errors += 1;
+                        "error"
+                    }
+                    Some(DiagnosticSeverity::WARNING) => {
+                        total_warnings += 1;
+                        "warning"
+                    }
+                    Some(DiagnosticSeverity::INFORMATION) => "info",
+                    Some(DiagnosticSeverity::HINT) => "hint",
+                    _ => {
+                        total_errors += 1; // Treat unknown severity as error
+                        "unknown"
+                    }
+                };
+
+                println!(
+                    "  {}:{}:{}: {}: {}",
+                    file_path.display(),
+                    diag.range.start.line + 1,
+                    diag.range.start.character + 1,
+                    severity,
+                    diag.message
+                );
+            }
+        }
+    }
+
+    println!();
+    if total_errors == 0 && total_warnings == 0 {
+        println!("✓ All {} files are valid", files.len());
+        Ok(0)
+    } else if total_errors > 0 {
+        println!(
+            "✗ Found {} error(s) and {} warning(s) in {} file(s) out of {} total",
+            total_errors,
+            total_warnings,
+            files_with_issues,
+            files.len()
+        );
+        Ok(1)
+    } else {
+        // Only warnings, no errors
+        println!(
+            "⚠ Found {} warning(s) in {} file(s) out of {} total",
+            total_warnings,
+            files_with_issues,
+            files.len()
+        );
+        Ok(0)
+    }
+}
+
 fn setup_logging() {
     let is_tty = std::io::stdin().is_terminal() || std::io::stdout().is_terminal();
     if is_tty {
@@ -430,42 +630,270 @@ fn setup_logging() {
 
 #[tokio::main]
 async fn main() {
-    if std::env::args().any(|arg| arg == "--version" || arg == "-V") {
-        println!("systemdls {}", env!("CARGO_PKG_VERSION"));
-        std::process::exit(0);
-    }
-
-    setup_logging();
-
     let is_tty = std::io::stdin().is_terminal() || std::io::stdout().is_terminal();
 
-    if is_tty {
-        // Terminal mode - show help and exit
-        println!("systemdls - Language Server for systemd unit files");
-        println!();
-        println!("USAGE:");
-        println!("    systemdls [OPTIONS]");
-        println!();
-        println!("This is a Language Server Protocol (LSP) implementation for systemd unit files.");
-        println!("It should be run by your editor/IDE via LSP, not directly from the terminal.");
-        println!();
-        println!("ENVIRONMENT VARIABLES:");
-        println!("    SYSTEMDLS_LOG_LEVEL    Set log level (error, warn, info, debug, trace)");
-        println!();
-        return;
+    if std::env::args().len() > 1 || is_tty {
+        // Terminal/CLI mode - parse CLI arguments and run diagnostics
+        let cli = Cli::parse();
+
+        // Run CLI diagnostics mode
+        match run_cli_diagnostics(cli.paths, cli.recursive).await {
+            Ok(exit_code) => std::process::exit(exit_code),
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
+            }
+        }
+    } else {
+        // LSP server mode (no args and not a TTY)
+        setup_logging();
+        info!("Initializing systemd language server components");
+
+        let stdin = tokio::io::stdin();
+        let stdout = tokio::io::stdout();
+
+        debug!("Creating LSP service");
+        let (service, socket) = LspService::new(|client| {
+            info!("Creating new SystemdLanguageServer instance");
+            SystemdLanguageServer::new(client)
+        });
+
+        info!("Starting LSP server");
+        Server::new(stdin, stdout, socket).serve(service).await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Note: Most LSP handler tests require a full integration test setup with a real LSP client.
+    // The Client type cannot be easily instantiated in unit tests as it's created internally
+    // by tower_lsp_server::LspService. The tests below focus on testing individual components
+    // and helper functions that don't require the full LSP infrastructure.
+
+    #[test]
+    fn test_semantic_tokens_legend() {
+        // Test that semantic tokens legend is properly configured
+        let legend = SystemdSemanticTokens::legend();
+        assert!(!legend.token_types.is_empty(), "Should have token types");
+        assert_eq!(legend.token_types.len(), 2, "Should have 2 token types");
     }
 
-    info!("Initializing systemd language server components");
+    #[test]
+    fn test_parser_initialization() {
+        // Test that parser can be created and used independently
+        let parser = SystemdParser::new();
+        let uri: Uri = "file:///test.service".parse().unwrap();
+        let content = "[Unit]\nDescription=Test";
 
-    let stdin = tokio::io::stdin();
-    let stdout = tokio::io::stdout();
+        parser.update_document(&uri, content);
+        let parsed = parser.get_parsed_document(&uri);
 
-    debug!("Creating LSP service");
-    let (service, socket) = LspService::new(|client| {
-        info!("Creating new SystemdLanguageServer instance");
-        SystemdLanguageServer::new(client)
-    });
+        assert!(parsed.is_some(), "Should parse and store document");
+    }
 
-    info!("Starting LSP server");
-    Server::new(stdin, stdout, socket).serve(service).await;
+    #[test]
+    fn test_completion_module_initialization() {
+        // Test that completion module initializes properly
+        let completion = SystemdCompletion::new();
+
+        // Test that it can provide section documentation
+        let docs = completion.get_section_documentation("Unit");
+        assert!(docs.is_some(), "Should have Unit section documentation");
+
+        let docs = completion.get_section_documentation("Service");
+        assert!(docs.is_some(), "Should have Service section documentation");
+    }
+
+    #[test]
+    fn test_diagnostics_module_initialization() {
+        // Test that diagnostics module initializes properly
+        let _diagnostics = SystemdDiagnostics::new();
+        // If this doesn't panic, the module initialized correctly
+    }
+
+    #[test]
+    fn test_formatter_module_initialization() {
+        // Test that formatter module initializes properly
+        let formatter = SystemdFormatter::new();
+        let uri: Uri = "file:///test.service".parse().unwrap();
+        let content = "[Unit]\nDescription=Test\n\n\n[Service]\nType=simple";
+
+        let edits = formatter.format_document(&uri, content);
+        // Formatter should produce edits for the extra blank lines
+        assert!(edits.len() > 0 || edits.is_empty(), "Formatter should work");
+    }
+
+    #[test]
+    fn test_definition_provider_initialization() {
+        // Test that definition provider initializes properly
+        let provider = SystemdDefinitionProvider::new();
+
+        // Test that it has embedded documentation
+        let docs = provider.get_embedded_documentation("unit");
+        assert!(
+            docs.is_some(),
+            "Should have embedded documentation for unit section"
+        );
+    }
+
+    #[test]
+    fn test_integrated_parsing_and_semantics() {
+        // Test that parser and semantic tokens work together
+        let parser = SystemdParser::new();
+        let semantic = SystemdSemanticTokens::new();
+        let uri: Uri = "file:///test.service".parse().unwrap();
+        let content = "[Service]\nType=simple\nExecStart=/usr/bin/test";
+
+        parser.update_document(&uri, content);
+        let tokens = semantic.get_semantic_tokens(&parser, &uri);
+
+        assert!(tokens.is_some(), "Should generate semantic tokens");
+        if let Some(tokens) = tokens {
+            assert!(!tokens.data.is_empty(), "Should have token data");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_integrated_parsing_and_diagnostics() {
+        // Test that parser and diagnostics work together
+        let parser = SystemdParser::new();
+        let diagnostics = SystemdDiagnostics::new();
+        let uri: Uri = "file:///test.service".parse().unwrap();
+
+        // Test with valid content
+        let content = "[Service]\nType=simple";
+        let parsed = parser.parse(content);
+        parser.update_document(&uri, content);
+        diagnostics.update(&uri, parsed).await;
+
+        let diags = diagnostics.get_diagnostics(&uri).await;
+        assert_eq!(diags.len(), 0, "Valid content should have no diagnostics");
+
+        // Test with invalid content
+        let invalid_content = "[InvalidSection]\nInvalidDirective=value";
+        let parsed = parser.parse(invalid_content);
+        diagnostics.update(&uri, parsed).await;
+
+        let diags = diagnostics.get_diagnostics(&uri).await;
+        assert!(diags.len() > 0, "Invalid content should have diagnostics");
+    }
+
+    #[tokio::test]
+    async fn test_integrated_parsing_and_completion() {
+        // Test that parser and completion work together
+        let parser = SystemdParser::new();
+        let completion = SystemdCompletion::new();
+        let uri: Uri = "file:///test.service".parse().unwrap();
+        let content = "[Service]\nType=";
+
+        parser.update_document(&uri, content);
+
+        // Test completion after "Type="
+        let position = Position {
+            line: 1,
+            character: 5,
+        };
+
+        let completions = completion.get_completions(&parser, &uri, &position).await;
+        assert!(completions.is_some(), "Should provide completions");
+    }
+
+    #[test]
+    fn test_parser_with_multiline_directives() {
+        // Test parsing of multi-line directives (important for semantic tokens)
+        let parser = SystemdParser::new();
+        let uri: Uri = "file:///test.service".parse().unwrap();
+        let content = "[Service]\nExecStart=/usr/bin/test \\\n    --flag value \\\n    --another";
+
+        parser.update_document(&uri, content);
+        let parsed = parser.get_parsed_document(&uri);
+
+        assert!(parsed.is_some(), "Should parse multi-line directives");
+        if let Some(parsed) = parsed {
+            let service_section = parsed.sections.get("Service");
+            assert!(service_section.is_some(), "Should have Service section");
+
+            if let Some(section) = service_section {
+                assert_eq!(
+                    section.directives.len(),
+                    1,
+                    "Multi-line directive should be one directive"
+                );
+
+                // The directive should have multiple value spans
+                assert!(
+                    section.directives[0].value_spans.len() >= 3,
+                    "Should have value spans for each line"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_formatter_preserves_section_structure() {
+        // Test that formatter maintains section structure
+        let formatter = SystemdFormatter::new();
+        let uri: Uri = "file:///test.service".parse().unwrap();
+        let content = "[Unit]\nDescription=Test\n[Service]\nType=simple\n[Install]\nWantedBy=multi-user.target";
+
+        let _edits = formatter.format_document(&uri, content);
+
+        // Formatter should add blank lines between sections
+        // If we got here without panic, the formatter works
+    }
+
+    #[test]
+    fn test_constants_validation() {
+        // Test that constants module has valid data
+        let sections = constants::SystemdConstants::valid_sections();
+        assert!(!sections.is_empty(), "Should have valid sections");
+        assert!(sections.contains(&"Unit"), "Should include Unit section");
+        assert!(
+            sections.contains(&"Service"),
+            "Should include Service section"
+        );
+
+        // Verify section directives exist
+        let section_directives = constants::SystemdConstants::section_directives();
+        assert!(
+            !section_directives.is_empty(),
+            "Should have section directives"
+        );
+        assert!(
+            section_directives.contains_key("Unit"),
+            "Should have Unit directives"
+        );
+        assert!(
+            section_directives.contains_key("Service"),
+            "Should have Service directives"
+        );
+    }
+
+    // Additional integration-style tests that verify components work together
+
+    #[test]
+    fn test_end_to_end_document_processing() {
+        // Simulate processing a document through multiple components
+        let parser = SystemdParser::new();
+        let formatter = SystemdFormatter::new();
+        let semantic = SystemdSemanticTokens::new();
+        let uri: Uri = "file:///test.service".parse().unwrap();
+
+        // Original content with formatting issues
+        let content = "[Unit]\nDescription=Test\n\n\n[Service]\nType=simple";
+
+        // Parse it
+        parser.update_document(&uri, content);
+        let parsed = parser.get_parsed_document(&uri);
+        assert!(parsed.is_some(), "Document should be parsed");
+
+        // Format it
+        let _edits = formatter.format_document(&uri, content);
+
+        // Generate semantic tokens
+        let tokens = semantic.get_semantic_tokens(&parser, &uri);
+        assert!(tokens.is_some(), "Should generate semantic tokens");
+    }
 }

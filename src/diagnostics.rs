@@ -188,16 +188,14 @@ mod tests {
                     end: end_column,
                 }];
 
-                section_directives.push(
-                    SystemdDirective {
-                        key: key.to_string(),
-                        value: value.to_string(),
-                        line_number,
-                        column_range: (0, key.len() as u32),
-                        end_line_number: line_number,
-                        value_spans: spans,
-                    },
-                );
+                section_directives.push(SystemdDirective {
+                    key: key.to_string(),
+                    value: value.to_string(),
+                    line_number,
+                    column_range: (0, key.len() as u32),
+                    end_line_number: line_number,
+                    value_spans: spans,
+                });
             }
 
             unit_sections.insert(
