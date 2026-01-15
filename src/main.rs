@@ -593,8 +593,8 @@ fn setup_logging() {
 async fn main() {
     let is_tty = std::io::stdin().is_terminal() || std::io::stdout().is_terminal();
 
-    if is_tty {
-        // Terminal mode - parse CLI arguments and run diagnostics
+    if std::env::args().len() > 1 || is_tty {
+        // Terminal/CLI mode - parse CLI arguments and run diagnostics
         let cli = Cli::parse();
 
         // Run CLI diagnostics mode
@@ -606,7 +606,7 @@ async fn main() {
             }
         }
     } else {
-        // LSP server mode
+        // LSP server mode (no args and not a TTY)
         setup_logging();
         info!("Initializing systemd language server components");
 
