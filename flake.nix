@@ -24,6 +24,9 @@
           version = cargo.package.version;
           src = self;
           cargoHash = "sha256-awzM0GC8ctgEDcz3gNFKNLYjsEYJ9s1ilJ23wgZj+1E=";
+
+          # Skip integration tests that require the built binary
+          cargoTestFlags = [ "--lib" "--bins" ];
         };
 
         runtimeEnv = with pkgs; [
