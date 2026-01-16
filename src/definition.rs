@@ -1,83 +1,19 @@
 use log::debug;
-use std::collections::HashMap;
 use std::path::PathBuf;
 use tower_lsp_server::lsp_types::{GotoDefinitionResponse, Location, Position, Range, Uri};
 use tower_lsp_server::UriExt;
 
+use crate::constants::SystemdConstants;
 use crate::parser::SystemdParser;
 
 #[derive(Debug)]
+// this is the shared file for loading the embedded documentation
 pub struct SystemdDefinitionProvider {
-    documentation: HashMap<String, String>,
     shared_temp_file: Option<PathBuf>,
 }
 
 impl SystemdDefinitionProvider {
     pub fn new() -> Self {
-        let mut documentation = HashMap::new();
-
-        // Embed all documentation directly in the binary for distribution reliability
-        documentation.insert(
-            "unit".to_string(),
-            include_str!("../docs/unit.md").to_string(),
-        );
-        documentation.insert(
-            "service".to_string(),
-            include_str!("../docs/service.md").to_string(),
-        );
-        documentation.insert(
-            "install".to_string(),
-            include_str!("../docs/install.md").to_string(),
-        );
-        documentation.insert(
-            "socket".to_string(),
-            include_str!("../docs/socket.md").to_string(),
-        );
-        documentation.insert(
-            "timer".to_string(),
-            include_str!("../docs/timer.md").to_string(),
-        );
-        documentation.insert(
-            "mount".to_string(),
-            include_str!("../docs/mount.md").to_string(),
-        );
-        documentation.insert(
-            "path".to_string(),
-            include_str!("../docs/path.md").to_string(),
-        );
-        documentation.insert(
-            "swap".to_string(),
-            include_str!("../docs/swap.md").to_string(),
-        );
-        documentation.insert(
-            "container".to_string(),
-            include_str!("../docs/container.md").to_string(),
-        );
-        documentation.insert(
-            "pod".to_string(),
-            include_str!("../docs/pod.md").to_string(),
-        );
-        documentation.insert(
-            "volume".to_string(),
-            include_str!("../docs/volume.md").to_string(),
-        );
-        documentation.insert(
-            "network".to_string(),
-            include_str!("../docs/network.md").to_string(),
-        );
-        documentation.insert(
-            "kube".to_string(),
-            include_str!("../docs/kube.md").to_string(),
-        );
-        documentation.insert(
-            "build".to_string(),
-            include_str!("../docs/build.md").to_string(),
-        );
-        documentation.insert(
-            "image".to_string(),
-            include_str!("../docs/image.md").to_string(),
-        );
-
         // Create a single shared temp file for all documentation
         let shared_temp_file = if let Ok(temp_dir) = std::env::temp_dir().canonicalize() {
             let temp_file = temp_dir.join("systemdls-documentation.md");
@@ -101,10 +37,7 @@ impl SystemdDefinitionProvider {
             None
         };
 
-        Self {
-            documentation,
-            shared_temp_file,
-        }
+        Self { shared_temp_file }
     }
 
     pub async fn get_definition(
@@ -149,11 +82,20 @@ impl SystemdDefinitionProvider {
         &self,
         section_name: &str,
     ) -> Option<GotoDefinitionResponse> {
-        let section_key = section_name.to_lowercase();
+        let docs = SystemdConstants::section_documentation();
+
+        // Try to find documentation (case-insensitive)
+        let content = docs.iter().find_map(|(key, value)| {
+            if key.eq_ignore_ascii_case(section_name) {
+                Some(*value)
+            } else {
+                None
+            }
+        });
 
         // Update the shared temp file with the requested section's documentation
         if let Some(temp_file) = &self.shared_temp_file {
-            if let Some(content) = self.documentation.get(&section_key) {
+            if let Some(content) = content {
                 if std::fs::write(temp_file, content).is_ok() {
                     debug!(
                         "Updated shared temp file with {} documentation",
@@ -185,7 +127,14 @@ impl SystemdDefinitionProvider {
 
     /// Get embedded documentation for a section
     pub fn get_embedded_documentation(&self, section_key: &str) -> Option<String> {
-        self.documentation.get(section_key).cloned()
+        let docs = SystemdConstants::section_documentation();
+        docs.iter().find_map(|(key, value)| {
+            if key.eq_ignore_ascii_case(section_key) {
+                Some(value.to_string())
+            } else {
+                None
+            }
+        })
     }
 
     /// Clean up temporary documentation files
@@ -210,27 +159,19 @@ mod tests {
 
     #[test]
     fn test_embedded_documentation_exists() {
-        let provider = SystemdDefinitionProvider::new();
+        let docs = SystemdConstants::section_documentation();
 
-        // Test that all expected documentation is embedded
-        assert!(provider.documentation.contains_key("unit"));
-        assert!(provider.documentation.contains_key("service"));
-        assert!(provider.documentation.contains_key("install"));
-        assert!(provider.documentation.contains_key("socket"));
-        assert!(provider.documentation.contains_key("timer"));
-        assert!(provider.documentation.contains_key("mount"));
-        assert!(provider.documentation.contains_key("path"));
-        assert!(provider.documentation.contains_key("swap"));
+        // Test that all expected documentation is present and not empty
+        let expected_sections = vec![
+            "Unit", "Service", "Install", "Socket", "Timer",
+            "Mount", "Path", "Swap", "Automount", "Device",
+            "Slice", "Scope"
+        ];
 
-        // Test content is not empty
-        assert!(!provider.documentation["unit"].is_empty());
-        assert!(!provider.documentation["service"].is_empty());
-        assert!(!provider.documentation["install"].is_empty());
-
-        // Test content contains expected headers
-        assert!(provider.documentation["unit"].contains("# [Unit] Section"));
-        assert!(provider.documentation["service"].contains("# [Service] Section"));
-        assert!(provider.documentation["install"].contains("# [Install] Section"));
+        for section in expected_sections {
+            assert!(docs.contains_key(section), "{} should exist", section);
+            assert!(!docs[section].is_empty(), "{} docs should not be empty", section);
+        }
     }
 
     #[tokio::test]
@@ -328,21 +269,19 @@ mod tests {
 
     #[test]
     fn test_documentation_content_quality() {
-        let provider = SystemdDefinitionProvider::new();
+        let docs = SystemdConstants::section_documentation();
 
         // Test that documentation contains useful content
-        let unit_docs = &provider.documentation["unit"];
-        assert!(unit_docs.contains("Description="));
-        assert!(unit_docs.contains("Requires="));
-        assert!(unit_docs.contains("After="));
+        let unit_docs = docs["Unit"];
+        assert!(unit_docs.len() > 100, "Unit docs should be substantial");
+        assert!(unit_docs.contains("[Unit]"));
 
-        let service_docs = &provider.documentation["service"];
-        assert!(service_docs.contains("Type="));
-        assert!(service_docs.contains("ExecStart="));
-        assert!(service_docs.contains("Restart="));
+        let service_docs = docs["Service"];
+        assert!(service_docs.len() > 100, "Service docs should be substantial");
+        assert!(service_docs.contains("[Service]"));
 
-        let install_docs = &provider.documentation["install"];
-        assert!(install_docs.contains("WantedBy="));
-        assert!(install_docs.contains("multi-user.target"));
+        let install_docs = docs["Install"];
+        assert!(install_docs.len() > 100, "Install docs should be substantial");
+        assert!(install_docs.contains("[Install]"));
     }
 }

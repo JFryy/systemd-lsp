@@ -21,6 +21,10 @@ exclude = [
     "!README.md"
 ]
 
+[lib]
+name = "systemd_lsp"
+path = "src/lib.rs"
+
 [[bin]]
 name = "systemd-lsp"
 path = "src/main.rs"
