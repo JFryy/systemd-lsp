@@ -1,1 +1,0 @@
-The [Kube] section describes Kubernetes YAML that will be run as a systemd service using Podman Quadlet. Kube units use the .kube file extension and allow you to run Kubernetes-compatible YAML definitions with Podman. At minimum, a Kube unit must specify a Yaml= directive.

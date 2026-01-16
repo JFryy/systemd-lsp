@@ -7,6 +7,12 @@ impl SystemdConstants {
         include_str!("../docs/sections.txt").lines().collect()
     }
 
+    /*
+    // Lists containing valid directives for each section
+    // this is stored in docs and _should_ be generated from
+    // from the parent documentation to keep it up to date
+    // and not prone to human error.
+    */
     pub fn section_directives() -> HashMap<&'static str, Vec<&'static str>> {
         let mut map = HashMap::new();
 
@@ -56,13 +62,6 @@ impl SystemdConstants {
             "Swap",
             include_str!("../docs/directives/swap.txt")
                 .lines()
-                .collect(),
-        );
-        map.insert(
-            "Target",
-            include_str!("../docs/directives/target.txt")
-                .lines()
-                .filter(|line| !line.starts_with('#') && !line.trim().is_empty())
                 .collect(),
         );
         map.insert(
@@ -293,25 +292,28 @@ impl SystemdConstants {
     pub fn section_documentation() -> HashMap<&'static str, &'static str> {
         let mut map = HashMap::new();
 
-        map.insert("Unit", include_str!("../docs/sections/unit.txt"));
-        map.insert("Service", include_str!("../docs/sections/service.txt"));
-        map.insert("Install", include_str!("../docs/sections/install.txt"));
-        map.insert("Timer", include_str!("../docs/sections/timer.txt"));
-        map.insert("Socket", include_str!("../docs/sections/socket.txt"));
-        map.insert("Mount", include_str!("../docs/sections/mount.txt"));
-        map.insert("Path", include_str!("../docs/sections/path.txt"));
-        map.insert("Swap", include_str!("../docs/sections/swap.txt"));
-        map.insert("Automount", include_str!("../docs/sections/automount.txt"));
-        map.insert("Device", include_str!("../docs/sections/device.txt"));
-        map.insert("Slice", include_str!("../docs/sections/slice.txt"));
-        map.insert("Scope", include_str!("../docs/sections/scope.txt"));
-        map.insert("Container", include_str!("../docs/sections/container.txt"));
-        map.insert("Pod", include_str!("../docs/sections/pod.txt"));
-        map.insert("Volume", include_str!("../docs/sections/volume.txt"));
-        map.insert("Network", include_str!("../docs/sections/network.txt"));
-        map.insert("Kube", include_str!("../docs/sections/kube.txt"));
-        map.insert("Build", include_str!("../docs/sections/build.txt"));
-        map.insert("Image", include_str!("../docs/sections/image.txt"));
+        // Use comprehensive markdown files for detailed documentation
+        map.insert("Unit", include_str!("../docs/unit.md"));
+        map.insert("Service", include_str!("../docs/service.md"));
+        map.insert("Install", include_str!("../docs/install.md"));
+        map.insert("Timer", include_str!("../docs/timer.md"));
+        map.insert("Socket", include_str!("../docs/socket.md"));
+        map.insert("Mount", include_str!("../docs/mount.md"));
+        map.insert("Path", include_str!("../docs/path.md"));
+        map.insert("Swap", include_str!("../docs/swap.md"));
+        map.insert("Container", include_str!("../docs/container.md"));
+        map.insert("Pod", include_str!("../docs/pod.md"));
+        map.insert("Volume", include_str!("../docs/volume.md"));
+        map.insert("Network", include_str!("../docs/network.md"));
+        map.insert("Kube", include_str!("../docs/kube.md"));
+        map.insert("Build", include_str!("../docs/build.md"));
+        map.insert("Image", include_str!("../docs/image.md"));
+
+        // Additional sections from docs/sections/
+        map.insert("Automount", include_str!("../docs/sections/automount.md"));
+        map.insert("Device", include_str!("../docs/sections/device.md"));
+        map.insert("Slice", include_str!("../docs/sections/slice.md"));
+        map.insert("Scope", include_str!("../docs/sections/scope.md"));
 
         map
     }
@@ -347,7 +349,6 @@ mod tests {
         assert!(directives.contains_key("Mount"));
         assert!(directives.contains_key("Path"));
         assert!(directives.contains_key("Swap"));
-        assert!(directives.contains_key("Target"));
         assert!(directives.contains_key("Automount"));
         assert!(directives.contains_key("Device"));
         assert!(directives.contains_key("Slice"));
@@ -489,18 +490,6 @@ mod tests {
     #[test]
     fn test_app_name_constant() {
         assert_eq!(SystemdConstants::APP_NAME, "systemdls");
-    }
-
-    #[test]
-    fn test_target_section_filters_comments() {
-        let directives = SystemdConstants::section_directives();
-        let target_directives = directives.get("Target").unwrap();
-
-        // Ensure no lines that start with # are included
-        for directive in target_directives {
-            assert!(!directive.starts_with('#'));
-            assert!(!directive.trim().is_empty());
-        }
     }
 
     #[test]

@@ -1,1 +1,0 @@
-The [Volume] section describes a Podman volume that will be managed using Podman Quadlet. Volume units use the .volume file extension and are automatically converted into systemd service units. Volumes provide persistent data storage for containers.

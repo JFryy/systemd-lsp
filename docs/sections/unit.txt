@@ -1,1 +1,0 @@
-The [Unit] section contains generic information about the unit that is not dependent on the type of unit. Options in this section are shared by all unit types. This section is used to define metadata about the unit (such as dependencies), conditions and assertions that must be met before the unit is started, and various other configuration settings.

@@ -1,1 +1,0 @@
-Socket units encapsulate local IPC or network sockets in the system, useful for socket-based activation.

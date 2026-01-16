@@ -1,1 +1,0 @@
-The [Container] section describes the container that will be run as a systemd service using Podman Quadlet. Container units use the .container file extension and are automatically converted into systemd service units. At minimum, a Container unit must specify an Image= directive to run.
