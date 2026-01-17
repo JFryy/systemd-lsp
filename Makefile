@@ -1,4 +1,4 @@
-.PHONY: build test test-coverage test-section-coverage test-directive-coverage clean
+.PHONY: build test test-coverage test-section-coverage test-directive-coverage clean gen-docs gen-docs-check
 
 build: test
 	cargo build --release
@@ -18,6 +18,12 @@ test-coverage:
 	@echo ""
 	@echo "=== Checking Directive Documentation Coverage ==="
 	@cargo test --test lsp_tests all_directives_have_documentation -- --ignored --no-capture || true
+
+gen-docs:
+	@cd tools/doc-sync/ && go run . --generate
+
+gen-docs-check:
+	@cd tools/doc-sync/ && go run .
 
 clean:
 	cargo clean

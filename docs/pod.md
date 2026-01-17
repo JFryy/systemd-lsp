@@ -1,269 +1,218 @@
 # [Pod] Section
 
-The `[Pod]` section describes a Podman pod that will be run as a systemd service using Podman Quadlet. A pod is a group of one or more containers that share resources like network namespaces, making them operate as a cohesive unit. Pod units use the `.pod` file extension and are automatically converted into systemd service units.
+Pod units are named with a `.pod` extension and contain a `[Pod]` section describing
+the pod that is created and run as a service. The resulting service file contains a line like
+`ExecStartPre=podman pod create …`, and most of the keys in this section control the command-line
+options passed to Podman.
+
+By default, the Podman pod has the same name as the unit, but with a `systemd-` prefix, i.e.
+a `$name.pod` file creates a `$name-pod.service` unit and a `systemd-$name` Podman pod. The
+`PodName` option allows for overriding this default name with a user-provided one.
+
+Valid options for `[Pod]` are listed below:
 
 *Based on [podman-systemd.unit(5)](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html) official documentation.*
 
-## Basic Configuration
-
-### PodName=
-Sets a custom name for the Podman pod instead of using the default.
-
-**Default:** `systemd-%N` (service name with `systemd-` prefix)
-
-**Note:** Cannot conflict with container names
-
-### ServiceName=
-Overrides the default systemd service unit naming; prevents appending `-pod` suffix.
-
-**Format:** Unit name without `.service` extension
-
-**Default:** Quadlet appends `-pod` to unit name
-
-## Networking
-
-### Network=
-Specifies custom network for the pod.
-
-**Format:**
-- Network name
-- `host` - Use host networking
-- `none` - No networking
-- `.network` suffix - Reference to Quadlet network unit (auto-generates service dependency)
-
-**Multiple:** Yes
-
-**Example:**
-- `Network=host`
-- `Network=mynetwork.network`
-
-### PublishPort=
-Exposes port(s) from pod to host; supports ranges.
-
-**Format:**
-- `containerPort` (e.g., `80`)
-- `hostPort:containerPort` (e.g., `8080:80`)
-- `ip:hostPort:containerPort` (e.g., `127.0.0.1:8080:80`)
-- `ip::containerPort` (dynamic host port)
-- Port ranges (e.g., `50-59`)
-
-**Multiple:** Yes
-
-**Note:** Host port auto-selection differs per invocation; find with `podman port` command
-
-**Constraint:** Cannot use with `Network=host`
-
-**Example:** `PublishPort=8080:80`
-
-### IP=
-Specifies static IPv4 address for the pod.
-
-**Format:** IPv4 address
-
-**Example:** `IP=10.88.64.128`
-
-### IP6=
-Specifies static IPv6 address for the pod.
-
-**Format:** IPv6 address
-
-**Example:** `IP6=fd46:db93:aa76:ac37::10`
-
-### NetworkAlias=
-Adds network-scoped alias for the pod; useful for DNS resolution grouping.
-
-**Multiple:** Yes
-
-### HostName=
-Sets the pod's hostname inside all containers; adds hostname to /etc/hosts.
-
-**Multiple:** Yes
-
-### DNS=
-Sets network-scoped DNS resolver or nameserver for containers within the pod.
-
-**Multiple:** Yes
-
-**Example:** `DNS=8.8.8.8`
-
-### DNSSearch=
-Establishes custom DNS search domains.
-
-**Format:** Domain name or `.` to remove search domain
-
-**Multiple:** Yes
-
-### DNSOption=
-Configures custom DNS options for the pod.
-
-**Multiple:** Yes
-
-**Example:** `DNSOption=ndots:1`
-
 ### AddHost=
-Adds host-to-IP mappings to the pod's /etc/hosts file.
 
-**Format:** `hostname:ip`
+Add host-to-IP mapping to /etc/hosts.
+The format is `hostname:ip`.
 
-**Multiple:** Yes
-
-**Example:** `AddHost=db.local:192.168.1.10`
-
-## Storage
-
-### Volume=
-Mounts volume in the pod.
-
-**Format:** `[[SOURCE-VOLUME|HOST-DIR:]CONTAINER-DIR[:OPTIONS]]`
-
-**Special Case:** If SOURCE-VOLUME ends with `.volume`, uses corresponding Quadlet unit with auto-generated service dependency
-
-**Relative Path Handling:** Paths starting with `.` resolve relative to unit file location
-
-**Multiple:** Yes
-
-**Example:**
-- `Volume=/srv/data:/data:Z`
-- `Volume=myvolume.volume:/data`
-
-### ShmSize=
-Sets the size of /dev/shm for the pod.
-
-**Format:** `number[unit]`
-
-**Example:** `ShmSize=100m`
-
-## User Namespaces
-
-### UserNS=
-Sets user namespace mode for the pod.
-
-**Format:** `MODE[:OPTIONS,...]`
-
-**Example:** `UserNS=keep-id:uid=200,gid=210`
-
-### UIDMap=
-Creates pod in new user namespace using supplied UID mapping.
-
-**Format:** `container_uid:host_uid:range`
-
-**Multiple:** Yes
-
-**Example:** `UIDMap=0:10000:10`
-
-### GIDMap=
-Creates pod in new user namespace using supplied GID mapping.
-
-**Format:** `container_gid:host_gid:range`
-
-**Multiple:** Yes
-
-**Example:** `GIDMap=0:10000:10`
-
-### SubUIDMap=
-Creates pod in new user namespace using named map from /etc/subuid file.
-
-**Format:** Map name
-
-### SubGIDMap=
-Creates pod in new user namespace using named map from /etc/subgid file.
-
-**Format:** Map name
-
-## Metadata and Labels
-
-### Label=
-Sets one or more OCI labels on the pod.
-
-**Format:** `key=value` items, similar to Environment variable format
-
-**Multiple:** Yes
-
-**Example:** `Label=version=1.0 app=myapp`
-
-## Lifecycle Management
-
-### ExitPolicy=
-Determines pod behavior when the last container exits.
-
-**Values:**
-- `stop` - Stop the pod (default for Quadlets)
-- `continue` - Keep pod active
-
-**Default:** `stop`
-
-### StopTimeout=
-Specifies time in seconds for graceful pod shutdown; containers forcibly killed after period expires.
-
-**Format:** Numeric seconds
-
-**Note:** Should be lower than systemd unit timeout to prevent interruption
-
-## Advanced Options
+Equivalent to the Podman `--add-host` option.
+This key can be listed multiple times.
 
 ### ContainersConfModule=
-Loads a specified containers.conf(5) module for the pod.
 
-**Multiple:** Yes
+Load the specified containers.conf(5) module. Equivalent to the Podman `--module` option.
+
+This key can be listed multiple times.
+
+### DNS=
+
+Set network-scoped DNS resolver/nameserver for containers in this pod.
+
+This key can be listed multiple times.
+
+### DNSOption=
+
+Set custom DNS options.
+
+This key can be listed multiple times.
+
+### DNSSearch=
+
+Set custom DNS search domains. Use **DNSSearch=.** to remove the search domain.
+
+This key can be listed multiple times.
+
+### ExitPolicy=
+
+Set the exit policy of the pod when the last container exits. Default for quadlets is **stop**.
+
+To keep the pod active, set `ExitPolicy=continue`.
+
+### GIDMap=
+
+Create the pod in a new user namespace using the supplied GID mapping.
+Equivalent to the Podman `--gidmap` option.
+
+This key can be listed multiple times.
 
 ### GlobalArgs=
-Contains arguments passed directly between `podman` and `pod` in generated files.
 
-**Format:** Space-separated list, optionally individually escaped
+This key contains a list of arguments passed directly between `podman` and `pod`
+in the generated file. It can be used to access Podman features otherwise unsupported by the generator. Since the generator is unaware
+of what unexpected interactions can be caused by these arguments, it is not recommended to use
+this option.
 
-**Note:** Not recommended; use for unsupported features only
+The format of this is a space separated list of arguments, which can optionally be individually
+escaped to allow inclusion of whitespace and other control characters.
 
-**Multiple:** Yes
+This key can be listed multiple times.
+
+### HostName=
+
+Set the pod’s hostname inside all containers.
+
+The given hostname is also added to the /etc/hosts file using the container’s primary IP address (also see the `--add-host` option).
+
+Equivalent to the Podman `--hostname` option.
+This key can be listed multiple times.
+
+### IP=
+
+Specify a static IPv4 address for the pod, for example **10.88.64.128**.
+Equivalent to the Podman `--ip` option.
+
+### IP6=
+
+Specify a static IPv6 address for the pod, for example **fd46:db93:aa76:ac37::10**.
+Equivalent to the Podman `--ip6` option.
+
+### Label=
+
+Set one or more OCI labels on the pod. The format is a list of
+`key=value` items, similar to `Environment`.
+
+This key can be listed multiple times.
+
+### Network=
+
+Specify a custom network for the pod.
+This has the same format as the `--network` option to `podman pod create`.
+For example, use `host` to use the host network in the pod, or `none` to not set up networking in the pod.
+
+Special case:
+
+- If the `name` of the network ends with `.network`, Quadlet will look for the corresponding `.network` Quadlet unit. If found, Quadlet will use the name of the Network set in the Unit, otherwise, `systemd-$name` is used.
+
+The generated systemd service contains a dependency on the service unit generated for that `.network` unit. Note: the corresponding `.network` file must exist.
+
+This key can be listed multiple times.
+
+### NetworkAlias=
+
+Add a network-scoped alias for the pod. This has the same format as the `--network-alias` option to
+`podman pod create`. Aliases can be used to group containers together in DNS resolution: for
+example, setting `NetworkAlias=web` on multiple containers will make a DNS query for `web` resolve
+to all the containers with that alias.
+
+This key can be listed multiple times.
 
 ### PodmanArgs=
-Contains arguments passed directly to end of `podman pod create` command.
 
-**Format:** Space-separated list, optionally individually escaped
+This key contains a list of arguments passed directly to the end of the `podman pod create` command
+in the generated file. It can be used to access Podman features otherwise unsupported by the generator. Since the generator is unaware
+of what unexpected interactions can be caused by these arguments, is not recommended to use
+this option.
 
-**Note:** Not recommended; use for unsupported features only
+The format of this is a space separated list of arguments, which can optionally be individually
+escaped to allow inclusion of whitespace and other control characters.
 
-**Multiple:** Yes
+This key can be listed multiple times.
 
-## Example
+### PodName=
 
-```ini
-[Unit]
-Description=Application pod
-After=network-online.target
-Wants=network-online.target
+The (optional) name of the Podman pod.
+If this is not specified, the default value is the same name as the unit, but with a `systemd-` prefix,
+i.e. a `$name.pod` file creates a `systemd-$name` Podman pod to avoid conflicts with user-managed pods.
 
-[Pod]
-PodName=myapp-pod
-Network=mynetwork.network
-PublishPort=8080:80
-PublishPort=8443:443
-Volume=/srv/data:/data:Z
-DNS=8.8.8.8
-DNSSearch=example.com
-Label=app=myapp version=1.0
+Please note that pods and containers cannot have the same name.
+So, if PodName is set, it must not conflict with any container.
 
-[Service]
-Restart=always
+### PublishPort=
 
-[Install]
-WantedBy=multi-user.target
-```
+Exposes a port, or a range of ports (e.g. `50-59`), from the pod to the host. Equivalent
+to the Podman `--publish` option. The format is similar to the Podman options, which is of
+the form `ip:hostPort:containerPort`, `ip::containerPort`, `hostPort:containerPort` or
+`containerPort`, where the number of host and container ports must be the same (in the case
+of a range).
 
-## Using Pods with Containers
+If the IP is set to 0.0.0.0 or not set at all, the port is bound on all IPv4 addresses on
+the host; use \[::\] for IPv6.
 
-After creating a pod unit, reference it from container units using the `Pod=` directive:
+Note that not listing a host port means that Podman automatically selects one, and it
+may be different for each invocation of service. This makes that a less useful option. The
+allocated port can be found with the `podman port` command.
 
-```ini
-# myapp.container
-[Container]
-Pod=myapp.pod
-Image=docker.io/myapp:latest
-```
+When using `host` networking via `Network=host`, the `PublishPort=` option cannot be used.
 
-## See Also
+This key can be listed multiple times.
 
-- [podman-systemd.unit(5)](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html)
-- [podman-pod(1)](https://docs.podman.io/en/latest/markdown/podman-pod.1.html)
-- [podman-pod-create(1)](https://docs.podman.io/en/latest/markdown/podman-pod-create.1.html)
-- systemd.unit(5)
-- systemd.service(5)
+### ServiceName=
+
+By default, Quadlet will name the systemd service unit by appending `-pod` to the name of the Quadlet.
+Setting this key overrides this behavior by instructing Quadlet to use the provided name.
+
+Note, the name should not include the `.service` file extension
+
+### ShmSize=
+
+Size of /dev/shm.
+
+This is equivalent to the Podman `--shm-size` option and generally has the form `number[unit]`
+
+### StopTimeout=
+
+Sets the time in seconds to wait for the pod to gracefully stop.
+This value is equivalent to the `--time` argument in the podman `pod stop` command when the service is stopped.
+After this period expires, any running containers in the pod are forcibly killed.
+
+### SubGIDMap=
+
+Create the pod in a new user namespace using the map with name in the /etc/subgid file.
+Equivalent to the Podman `--subgidname` option.
+
+### SubUIDMap=
+
+Create the pod in a new user namespace using the map with name in the /etc/subuid file.
+Equivalent to the Podman `--subuidname` option.
+
+### UIDMap=
+
+Create the pod in a new user namespace using the supplied UID mapping.
+Equivalent to the Podman `--uidmap` option.
+
+This key can be listed multiple times.
+
+### UserNS=
+
+Set the user namespace mode for the pod. This is equivalent to the Podman `--userns` option and
+generally has the form `MODE[:OPTIONS,...]`.
+
+### Volume=
+
+Mount a volume in the pod. This is equivalent to the Podman `--volume` option, and
+generally has the form `[[SOURCE-VOLUME|HOST-DIR:]CONTAINER-DIR[:OPTIONS]]`.
+
+If `SOURCE-VOLUME` starts with `.`, Quadlet resolves the path relative to the location of the unit file.
+
+Special case:
+
+- If `SOURCE-VOLUME` ends with `.volume`, Quadlet will look for the corresponding `.volume` Quadlet unit. If found, Quadlet will use the name of the Volume set in the Unit, otherwise, `systemd-$name` is used. Note: the corresponding `.volume` file must exist.
+
+The generated systemd service contains a dependency on the service unit generated for that `.volume` unit,
+or on `$name-volume.service` if the `.volume` unit is not found.
+
+This key can be listed multiple times.
+

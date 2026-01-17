@@ -1,0 +1,7 @@
+FinalKillSignal
+KillMode
+KillSignal
+RestartKillSignal
+SendSIGHUP
+SendSIGKILL
+WatchdogSignal

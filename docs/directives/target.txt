@@ -1,2 +1,0 @@
-# Target units typically only use [Unit] and [Install] sections
-# They don't have their own specific directives

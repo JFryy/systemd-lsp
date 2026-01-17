@@ -31,3 +31,14 @@ jobs:
       run: make test-directive-coverage
       continue-on-error: true
 
+  doc-sync-check:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.25'
+    - name: Check documentation parity
+      run: make gen-docs-check
+

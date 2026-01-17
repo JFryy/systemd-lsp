@@ -1,645 +1,648 @@
 # [Container] Section
 
-The `[Container]` section describes the container that will be run as a systemd service using Podman Quadlet. Quadlet is a feature of Podman that allows you to manage containers declaratively through systemd unit files. Container units use the `.container` file extension and are automatically converted into systemd service units.
+Container units are named with a `.container` extension and contain a `[Container]` section describing
+the container that is run as a service. The resulting service file contains a line like
+`ExecStart=podman run … image-name`, and most of the keys in this section control the command-line
+options passed to Podman. However, some options also affect the details of how systemd is set up to run and
+interact with the container.
+
+By default, the Podman container has the same name as the unit, but with a `systemd-` prefix, i.e.
+a `$name.container` file creates a `$name.service` unit and a `systemd-$name` Podman container. The
+`ContainerName` option allows for overriding this default name with a user-provided one.
+
+There is only one required key, `Image`, which defines the container image the service runs.
+
+Valid options for `[Container]` are listed below:
 
 *Based on [podman-systemd.unit(5)](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html) official documentation.*
 
-## Required Directives
-
-### Image=
-The container image to run. It is recommended to use a fully qualified image name rather than a short name, both for performance and robustness reasons.
-
-**Format:** `registry.com/repository/image:tag` or image digest
-
-**Example:** `Image=docker.io/nginx:latest`
-
-**Note:** Supports references to `.image` or `.build` Quadlet files
-
-## Basic Configuration
-
-### ContainerName=
-Specifies a custom name for the Podman container instead of using the default.
-
-**Default:** `systemd-%N` (service name with `systemd-` prefix)
-
-### Exec=
-Additional arguments for the container; this has exactly the same effect as passing more arguments after a `podman run <image> <arguments>` invocation.
-
-**Format:** Command line arguments matching systemd command syntax
-
-### WorkingDir=
-Overrides the default working directory for command execution inside the container.
-
-**Default:** `/` (root directory, or the image's WORKDIR if set)
-
-### Entrypoint=
-Overrides the default ENTRYPOINT instruction from the container image.
-
-**Format:** Command string or JSON string for multi-option commands
-
-### User=
-Specifies the numeric user ID (UID) or username for processes executing in the container.
-
-**Note:** Can be combined with `Group=` to create `--user USER:GROUP` argument
-
-### Group=
-Sets the numeric GID for processes running within the container.
-
-**Note:** Must be paired with `User=` to create `--user USER:GROUP` argument
-
-### HostName=
-Configures the hostname accessible within the container environment.
-
-**Example:** `HostName=example.com`
-
-## Networking
-
-### Network=
-Defines networking configuration including network mode or custom network attachment.
-
-**Format:** `host`, `none`, network name, or `.network` Quadlet reference
-
-**Default:** Bridge network
-
-**Multiple:** Yes (can specify multiple networks)
-
-**Example:**
-- `Network=host` - Use host networking
-- `Network=mynetwork.network` - Use Quadlet network
-
-### PublishPort=
-Exposes container ports to the host with optional host binding and IP specification.
-
-**Format:**
-- `containerPort` (e.g., `80`)
-- `hostPort:containerPort` (e.g., `8080:80`)
-- `ip:hostPort:containerPort` (e.g., `127.0.0.1:8080:80`)
-- `ip::containerPort` (dynamic host port)
-
-**Multiple:** Yes
-
-**Example:** `PublishPort=8080:80`
-
-### ExposeHostPort=
-Exposes host ports or port ranges to the container.
-
-**Format:** Port number or range (e.g., `50-59`)
-
-**Multiple:** Yes
-
-### IP=
-Assigns a static IPv4 address to the container.
-
-**Example:** `IP=10.88.64.128`
-
-### IP6=
-Assigns a static IPv6 address to the container.
-
-**Example:** `IP6=fd46:db93:aa76:ac37::10`
-
-### NetworkAlias=
-Registers network-scoped DNS aliases grouping containers for service discovery.
-
-**Multiple:** Yes
-
-### DNS=
-Assigns network-scoped DNS resolver or nameserver for the container.
-
-**Format:** IP address
-
-**Multiple:** Yes
-
-**Example:** `DNS=192.168.55.1`
-
-### DNSSearch=
-Configures DNS search domains for hostname resolution within the container.
-
-**Format:** Domain name or `.` to remove search domain
-
-**Multiple:** Yes
-
-### DNSOption=
-Sets custom DNS resolver options and behaviors.
-
-**Example:** `DNSOption=ndots:1`
-
-**Multiple:** Yes
-
-### AddHost=
-Establishes hostname-to-IP address mappings within the container's /etc/hosts file.
-
-**Format:** `hostname:ip`
-
-**Multiple:** Yes
-
-**Example:** `AddHost=db.local:192.168.1.10`
-
-## Storage and Volumes
-
-### Volume=
-Mounts host directories or named volumes into the container filesystem.
-
-**Format:** `[[SOURCE-VOLUME|HOST-DIR:]CONTAINER-DIR[:OPTIONS]]`
-
-**Options:**
-- `z` - Shared SELinux label
-- `Z` - Private SELinux label
-- `ro` - Read-only
-- `rw` - Read-write
-
-**Multiple:** Yes
-
-**Example:**
-- `Volume=/srv/data:/usr/share/nginx/html:Z`
-- `Volume=myvolume.volume:/data`
-
-### Mount=
-Attaches filesystem mounts with advanced configuration options.
-
-**Format:** `type=TYPE,TYPE-SPECIFIC-OPTION[,...]`
-
-**Multiple:** Yes
-
-**Note:** Supports `.volume` and `.image` file references
-
-### Tmpfs=
-Mounts temporary filesystems within the container at specified paths.
-
-**Format:** `CONTAINER-DIR[:OPTIONS]`
-
-**Multiple:** Yes
-
-**Example:** `Tmpfs=/tmp:size=64M`
-
-### Rootfs=
-Specifies a directory containing container filesystem content instead of using an image.
-
-**Note:** Conflicts with `Image` directive; supports overlay mount syntax
-
-### ReadOnly=
-Mounts the container's root filesystem in read-only mode.
-
-**Format:** `true` or `false`
-
-**Default:** `false`
-
-### ReadOnlyTmpfs=
-If ReadOnly is set to `true`, mount a read-write tmpfs on /dev, /dev/shm, /run, /tmp, and /var/tmp.
-
-**Format:** `true` or `false`
-
-**Default:** `true` (when ReadOnly is enabled)
-
-## Environment Variables
-
-### Environment=
-Sets environment variables inside the container using systemd service variable format.
-
-**Format:** `name=value` pairs matching systemd environment syntax
-
-**Multiple:** Yes
-
-**Example:** `Environment=FOO=bar`
-
-### EnvironmentFile=
-Loads environment variables from a line-delimited file into the container.
-
-**Format:** Absolute or relative path to environment file
-
-**Multiple:** Yes; order persists when passed to podman run
-
-### EnvironmentHost=
-Inherits the host system's environment variables into the container.
-
-**Format:** `true` or `false`
-
-**Default:** `false`
-
-## Security
-
 ### AddCapability=
-Extends the default Podman capability set by adding specified capabilities to the container.
 
-**Format:** Space-separated list of capability names
+Add these capabilities, in addition to the default Podman capability set, to the container.
 
-**Multiple:** Yes
+This is a space separated list of capabilities. This key can be listed multiple times.
 
-**Example:** `AddCapability=CAP_DAC_OVERRIDE CAP_IPC_OWNER`
+For example:
 
-### DropCapability=
-Removes capabilities from the default Podman set or removes all with `all`.
+```
+AddCapability=CAP_DAC_OVERRIDE CAP_IPC_OWNER
 
-**Format:** Space-separated capability names or `all`
-
-**Multiple:** Yes
-
-### NoNewPrivileges=
-Prevents container processes from acquiring additional privileges through setuid or capabilities.
-
-**Format:** `true` or `false`
-
-**Default:** `false`
-
-### SeccompProfile=
-Applies a seccomp (secure computing) filter profile for syscall restriction.
-
-**Format:** JSON file path or `unconfined` to disable filters
-
-### AppArmor=
-Configures the AppArmor confinement profile for the container.
-
-**Format:** Profile name or `unconfined` to disable AppArmor
-
-### SecurityLabelDisable=
-Disables SELinux label separation and isolation for the container.
-
-**Format:** `true` or `false`
-
-**Default:** `false` (labels enabled)
-
-### SecurityLabelType=
-Sets the SELinux process type context for container operations.
-
-**Example:** `SecurityLabelType=spc_t`
-
-### SecurityLabelLevel=
-Assigns SELinux level context for container processes.
-
-**Example:** `SecurityLabelLevel=s0:c1,c2`
-
-### SecurityLabelFileType=
-Sets the SELinux file type context for container files.
-
-**Example:** `SecurityLabelFileType=usr_t`
-
-### SecurityLabelNested=
-Enables SELinux label functionality within the container for nested isolation.
-
-**Format:** `true` or `false`
-
-**Default:** `false`
-
-### Mask=
-Prevents access to specified filesystem paths within the container.
-
-**Format:** Colon-separated paths
-
-**Example:** `Mask=/proc/sys/foo:/proc/sys/bar`
-
-### Unmask=
-Removes read-only or masked restrictions from filesystem paths in the container.
-
-**Format:** `ALL` or colon-separated paths
-
-## User Namespaces
-
-### UserNS=
-Configures the user namespace mode with optional parameters.
-
-**Format:** `MODE[:OPTIONS,...]`
-
-**Example:** `UserNS=keep-id:uid=200,gid=210`
-
-### UIDMap=
-Establishes user ID mapping for the container's user namespace.
-
-**Format:** `container_uid:host_uid:range`
-
-**Multiple:** Yes
-
-**Example:** `UIDMap=0:10000:10`
-
-### GIDMap=
-Establishes GID mapping for the container's new user namespace.
-
-**Format:** `container_gid:host_gid:range`
-
-**Multiple:** Yes
-
-**Example:** `GIDMap=0:10000:10`
-
-### SubUIDMap=
-Applies user ID mapping using a named entry from /etc/subuid.
-
-### SubGIDMap=
-Applies group ID mapping using a named entry from /etc/subgid.
-
-### GroupAdd=
-Assigns additional groups to the primary user process or applies special flags.
-
-**Format:** Group name, numeric GID, or `keep-groups` flag
-
-**Multiple:** Yes
-
-## Resource Limits
-
-### Memory=
-Restricts the maximum memory allocation for the container process.
-
-**Example:** `Memory=20g`
-
-**Default:** None (unlimited)
-
-### PidsLimit=
-Restricts the maximum number of processes within the container.
-
-**Format:** Numeric limit
-
-### ShmSize=
-Specifies the allocation size for the /dev/shm shared memory filesystem.
-
-**Example:** `ShmSize=100m`
-
-### Ulimit=
-Sets resource limits for processes within the container.
-
-**Format:** `name=softLimit:hardLimit`
-
-**Multiple:** Yes
-
-**Example:** `Ulimit=nofile=1000:10000`
-
-### Sysctl=
-Configures namespace-scoped kernel parameters within the container.
-
-**Format:** Space-separated `name=value` pairs
-
-**Multiple:** Yes
-
-**Example:** `Sysctl=net.ipv4.ip_forward=1`
-
-## Health Checks
-
-### HealthCmd=
-Defines or modifies the healthcheck command executed within the container.
-
-**Format:** Command string or `none` to disable existing healthchecks
-
-### HealthInterval=
-Establishes the time interval between successive healthcheck executions.
-
-**Format:** Duration (e.g., `2m`) or `disable`
-
-### HealthTimeout=
-Establishes the maximum duration per healthcheck command before timeout.
-
-**Example:** `HealthTimeout=20s`
-
-### HealthRetries=
-Sets the number of failed healthcheck attempts before marking unhealthy.
-
-### HealthStartPeriod=
-Allows initialization time before healthchecks begin.
-
-**Example:** `HealthStartPeriod=1m`
-
-### HealthOnFailure=
-Specifies corrective action when the container becomes unhealthy.
-
-**Example:** `HealthOnFailure=kill` (works best with systemd restart)
-
-### HealthStartupCmd=
-Specifies a startup-phase healthcheck command distinct from regular healthchecks.
-
-### HealthStartupInterval=
-Sets the interval for startup-phase healthcheck execution.
-
-**Format:** Duration or `disable`
-
-### HealthStartupRetries=
-Limits startup-phase healthcheck attempts before restart.
-
-### HealthStartupSuccess=
-Specifies successful startup-phase runs before regular healthchecks activate.
-
-### HealthStartupTimeout=
-Sets the maximum duration for startup-phase healthcheck command execution.
-
-### HealthLogDestination=
-Specifies where healthcheck logs are stored or logged.
-
-**Format:** `local` (default; overlay storage), `directory` (specified path), or `events_logger`
-
-**Default:** `local`
-
-### HealthMaxLogCount=
-Limits the number of healthcheck log entries retained.
-
-**Format:** Numeric value (0 = unlimited)
-
-**Default:** `5` attempts
-
-### HealthMaxLogSize=
-Restricts healthcheck log size to a character limit.
-
-**Format:** Numeric character count (0 = unlimited)
-
-**Default:** `500` characters
-
-## Devices and System Access
-
-### AddDevice=
-Mounts a device node from the host system into the container environment.
-
-**Format:** `HOST-DEVICE[:CONTAINER-DEVICE][:PERMISSIONS]`
-
-**Permissions:** Combine 'r' (read), 'w' (write), 'm' (mknod)
-
-**Multiple:** Yes
-
-**Note:** Prefix with `-` to add only if device exists
-
-**Example:** `AddDevice=/dev/sda:/dev/xvdc:rwm`
-
-## Logging
-
-### LogDriver=
-Selects the logging driver for container output handling.
-
-**Example:** `LogDriver=journald`
-
-### LogOpt=
-Provides driver-specific logging configuration options.
-
-**Multiple:** Yes
-
-**Example:** `LogOpt=path=/var/log/mykube.json`
-
-## Lifecycle and Signals
-
-### StopSignal=
-Designates the signal sent to halt the container process.
-
-**Default:** `SIGTERM`
-
-**Example:** `StopSignal=SIGINT`
-
-### StopTimeout=
-Sets seconds to wait before forcibly terminating the container.
-
-**Note:** Should be lower than systemd timeout to prevent systemd killing podman rm
-
-### ReloadSignal=
-Adds an ExecReload directive sending a signal to the container's main process.
-
-**Note:** Mutually exclusive with `ReloadCmd`
-
-**Example:** `ReloadSignal=SIGHUP`
-
-### ReloadCmd=
-Adds an ExecReload directive executing a podman exec command for service reloads.
-
-**Note:** Mutually exclusive with `ReloadSignal`
-
-### Notify=
-Configures systemd notification handling between container application and systemd.
-
-**Format:**
-- `false` (systemd handles) - default
-- `true` (container handles)
-- `healthy` (waits for healthcheck)
-
-**Default:** `false`
-
-### RunInit=
-Provides a minimal init process within the container for signal forwarding.
-
-**Format:** `true` or `false`
-
-**Default:** `false`
-
-## Container Groups (Pods)
-
-### Pod=
-Associates the container with a Quadlet `.pod` unit for group management.
-
-**Format:** `<name>.pod` reference to existing pod unit
-
-**Example:** `Pod=myapp.pod`
-
-### StartWithPod=
-Controls whether the container starts automatically when its associated pod starts.
-
-**Format:** `true` or `false`
-
-**Default:** `true`
-
-## Image Management
-
-### Pull=
-Determines when and how container images are pulled from registries.
-
-**Format:** Policy keyword (e.g., `never`, `always`, `missing`)
-
-### Retry=
-Sets the number of image pull retry attempts on HTTP errors.
-
-### RetryDelay=
-Establishes the delay interval between image pull retry attempts.
-
-**Example:** `RetryDelay=5s`
-
-### AutoUpdate=
-Controls whether the container undergoes automatic updates via podman-auto-update(1).
-
-**Format:**
-- `registry` (requires fully-qualified image reference)
-- `local` (compares against locally-stored image)
-
-### HttpProxy=
-Governs whether proxy environment variables propagate to the container during image operations.
-
-**Format:** `true` or `false`
-
-**Default:** `true`
-
-## Advanced Options
-
-### CgroupsMode=
-The cgroups mode of the container created by Quadlet.
-
-**Format:** `split`, `no-conmon`, `enabled`, or other cgroup modes
-
-**Default:** `split` (differs from Podman CLI default of `enabled`)
-
-### ContainersConfModule=
-Loads specified containers.conf(5) module configurations.
-
-**Format:** Path to module file
-
-**Multiple:** Yes
-
-### Timezone=
-Sets the timezone for processes executing within the container.
-
-**Example:** `Timezone=local`
-
-### Label=
-Attaches OCI metadata labels to the container as key-value pairs.
-
-**Format:** List of `key=value` items
-
-**Multiple:** Yes
-
-**Example:** `Label=version=1.0 app=web`
-
-### Annotation=
-Assigns OCI annotations to the container as metadata key-value pairs.
-
-**Format:** List of `key=value` items
-
-**Multiple:** Yes
-
-### Secret=
-Injects Podman secrets into the container as files or environment variables.
-
-**Format:** `secret[,opt=opt ...]` syntax
-
-**Multiple:** Yes
-
-### GlobalArgs=
-Passes arguments directly between `podman` and `run` commands, enabling access to unsupported Podman features.
-
-**Format:** Space-separated arguments, individually escapable for whitespace
-
-**Multiple:** Yes
-
-### PodmanArgs=
-Injects arguments directly into the `podman run` command for unsupported features.
-
-**Format:** Space-separated arguments, individually escapable
-
-**Multiple:** Yes
-
-## Example
-
-```ini
-[Unit]
-Description=Nginx web server
-After=network-online.target
-Wants=network-online.target
-
-[Container]
-Image=docker.io/nginx:latest
-ContainerName=nginx-server
-PublishPort=8080:80
-Volume=/srv/www:/usr/share/nginx/html:Z
-Environment=NGINX_PORT=80
-AutoUpdate=registry
-HealthCmd=curl -f http://localhost/ || exit 1
-HealthInterval=30s
-
-[Service]
-Restart=always
-TimeoutStartSec=900
-
-[Install]
-WantedBy=multi-user.target
 ```
 
-## See Also
+### AddDevice=
 
-- [podman-systemd.unit(5)](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html)
-- [podman-run(1)](https://docs.podman.io/en/latest/markdown/podman-run.1.html)
-- systemd.unit(5)
-- systemd.service(5)
+Adds a device node from the host into the container. The format of this is
+`HOST-DEVICE[:CONTAINER-DEVICE][:PERMISSIONS]`, where `HOST-DEVICE` is the path of
+the device node on the host, `CONTAINER-DEVICE` is the path of the device node in
+the container, and `PERMISSIONS` is a list of permissions combining ‘r’ for read,
+‘w’ for write, and ‘m’ for mknod(2). The `-` prefix tells Quadlet to add the device
+only if it exists on the host.
+
+This key can be listed multiple times.
+
+### AddHost=
+
+Add host-to-IP mapping to /etc/hosts.
+The format is `hostname:ip`.
+
+Equivalent to the Podman `--add-host` option.
+This key can be listed multiple times.
+
+### Annotation=
+
+Set one or more OCI annotations on the container. The format is a list of `key=value` items,
+similar to `Environment`.
+
+This key can be listed multiple times.
+
+### AppArmor=
+
+Sets the apparmor confinement profile for the container. A value of `unconfined` turns off apparmor confinement.
+
+### AutoUpdate=
+
+Indicates whether the container will be auto-updated ( [podman-auto-update(1)](podman-auto-update.1.html)). The following values are supported:
+
+- `registry`: Requires a fully-qualified image reference (e.g., quay.io/podman/stable:latest) to be used to create the container. This enforcement is necessary to know which image to actually check and pull. If an image ID was used, Podman does not know which image to check/pull anymore.
+
+- `local`: Tells Podman to compare the image a container is using to the image with its raw name in local storage. If an image is updated locally, Podman simply restarts the systemd unit executing the container.
+
+### CgroupsMode=
+
+The cgroups mode of the Podman container. Equivalent to the Podman `--cgroups` option.
+
+By default, the cgroups mode of the container created by Quadlet is `split`,
+which differs from the default ( `enabled`) used by the Podman CLI.
+
+If the container joins a pod (i.e. `Pod=` is specified), you may want to change this to
+`no-conmon` or `enabled` so that pod level cgroup resource limits can take effect.
+
+### ContainerName=
+
+The (optional) name of the Podman container. If this is not specified, the default value
+of `systemd-%N` is used, which is the same as the service name but with a `systemd-`
+prefix to avoid conflicts with user-managed containers.
+
+### ContainersConfModule=
+
+Load the specified containers.conf(5) module. Equivalent to the Podman `--module` option.
+
+This key can be listed multiple times.
+
+### DNS=
+
+Set network-scoped DNS resolver/nameserver for containers in this network.
+
+This key can be listed multiple times.
+
+### DNSOption=
+
+Set custom DNS options.
+
+This key can be listed multiple times.
+
+### DNSSearch=
+
+Set custom DNS search domains. Use **DNSSearch=.** to remove the search domain.
+
+This key can be listed multiple times.
+
+### DropCapability=
+
+Drop these capabilities from the default podman capability set, or `all` to drop all capabilities.
+
+This is a space separated list of capabilities. This key can be listed multiple times.
+
+For example:
+
+```
+DropCapability=CAP_DAC_OVERRIDE CAP_IPC_OWNER
+
+```
+
+### Entrypoint=
+
+Override the default ENTRYPOINT from the image.
+Equivalent to the Podman `--entrypoint` option.
+Specify multi option commands in the form of a JSON string.
+
+### Environment=
+
+Set an environment variable in the container. This uses the same format as
+[services in systemd](https://www.freedesktop.org/software/systemd/man/systemd.exec.html#Environment=)
+and can be listed multiple times.
+
+### EnvironmentFile=
+
+Use a line-delimited file to set environment variables in the container.
+The path may be absolute or relative to the location of the unit file.
+This key may be used multiple times, and the order persists when passed to `podman run`.
+
+### EnvironmentHost=
+
+Use the host environment inside of the container.
+
+### Exec=
+
+Additional arguments for the container; this has exactly the same effect as passing
+more arguments after a `podman run <image> <arguments>` invocation.
+
+The format is the same as for [systemd command lines](https://www.freedesktop.org/software/systemd/man/systemd.service.html#Command%20lines),
+However, unlike the usage scenario for similarly-named systemd `ExecStart=` verb
+which operates on the ambient root filesystem, it is very common for container
+images to have their own `ENTRYPOINT` or `CMD` metadata which this interacts with.
+
+The default expectation for many images is that the image will include an `ENTRYPOINT`
+with a default binary, and this field will add arguments to that entrypoint.
+
+Another way to describe this is that it works the same way as the [args field in a Kubernetes pod](https://kubernetes.io/docs/tasks/inject-data-application/define-command-argument-container/#running-a-command-in-a-shell).
+
+### ExposeHostPort=
+
+Exposes a port, or a range of ports (e.g. `50-59`), from the host to the container. Equivalent
+to the Podman `--expose` option.
+
+This key can be listed multiple times.
+
+### GIDMap=
+
+Run the container in a new user namespace using the supplied GID mapping.
+Equivalent to the Podman `--gidmap` option.
+
+This key can be listed multiple times.
+
+### GlobalArgs=
+
+This key contains a list of arguments passed directly between `podman` and `run`
+in the generated file. It can be used to access Podman features otherwise unsupported by the generator. Since the generator is unaware
+of what unexpected interactions can be caused by these arguments, it is not recommended to use
+this option.
+
+The format of this is a space separated list of arguments, which can optionally be individually
+escaped to allow inclusion of whitespace and other control characters.
+
+This key can be listed multiple times.
+
+### Group=
+
+The (numeric) GID to run as inside the container. This does not need to match the GID on the host,
+which can be modified with `UserNS`, but if that is not specified, this GID is also used on the host.
+
+Note: when both `User=` and `Group=` are specified, they are combined into a single `--user USER:GROUP`
+argument passed to Podman. Using `Group=` without `User=` will result in an error.
+
+### GroupAdd=
+
+Assign additional groups to the primary user running within the container process. Also supports the `keep-groups` special flag.
+Equivalent to the Podman `--group-add` option.
+
+### HealthCmd=
+
+Set or alter a healthcheck command for a container. A value of none disables existing healthchecks.
+Equivalent to the Podman `--health-cmd` option.
+
+### HealthInterval=
+
+Set an interval for the healthchecks. An interval of disable results in no automatic timer setup.
+Equivalent to the Podman `--health-interval` option.
+
+### HealthLogDestination=
+
+Set the destination of the HealthCheck log. Directory path, local or events\_logger (local use container state file)
+(Default: local)
+Equivalent to the Podman `--health-log-destination` option.
+
+- `local`: (default) HealthCheck logs are stored in overlay containers. (For example: `$runroot/healthcheck.log`)
+
+- `directory`: creates a log file named `<container-ID>-healthcheck.log` with HealthCheck logs in the specified directory.
+
+- `events_logger`: The log will be written with logging mechanism set by events\_logger. It also saves the log to a default directory, for performance on a system with a large number of logs.
+
+### HealthMaxLogCount=
+
+Set maximum number of attempts in the HealthCheck log file. (‘0’ value means an infinite number of attempts in the log file)
+(Default: 5 attempts)
+Equivalent to the Podman `--Health-max-log-count` option.
+
+### HealthMaxLogSize=
+
+Set maximum length in characters of stored HealthCheck log. (“0” value means an infinite log length)
+(Default: 500 characters)
+Equivalent to the Podman `--Health-max-log-size` option.
+
+### HealthOnFailure=
+
+Action to take once the container transitions to an unhealthy state.
+The “kill” action in combination integrates best with systemd. Once
+the container turns unhealthy, it gets killed, and systemd restarts the
+service.
+Equivalent to the Podman `--health-on-failure` option.
+
+### HealthRetries=
+
+The number of retries allowed before a healthcheck is considered to be unhealthy.
+Equivalent to the Podman `--health-retries` option.
+
+### HealthStartPeriod=
+
+The initialization time needed for a container to bootstrap.
+Equivalent to the Podman `--health-start-period` option.
+
+### HealthStartupCmd=
+
+Set a startup healthcheck command for a container.
+Equivalent to the Podman `--health-startup-cmd` option.
+
+### HealthStartupInterval=
+
+Set an interval for the startup healthcheck. An interval of disable results in no automatic timer setup.
+Equivalent to the Podman `--health-startup-interval` option.
+
+### HealthStartupRetries=
+
+The number of attempts allowed before the startup healthcheck restarts the container.
+Equivalent to the Podman `--health-startup-retries` option.
+
+### HealthStartupSuccess=
+
+The number of successful runs required before the startup healthcheck succeeds and the regular healthcheck begins.
+Equivalent to the Podman `--health-startup-success` option.
+
+### HealthStartupTimeout=
+
+The maximum time a startup healthcheck command has to complete before it is marked as failed.
+Equivalent to the Podman `--health-startup-timeout` option.
+
+### HealthTimeout=
+
+The maximum time allowed to complete the healthcheck before an interval is considered failed.
+Equivalent to the Podman `--health-timeout` option.
+
+### HostName=
+
+Sets the host name that is available inside the container.
+Equivalent to the Podman `--hostname` option.
+
+### HttpProxy=
+
+Controls whether proxy environment variables (http\_proxy, https\_proxy, ftp\_proxy, no\_proxy) are passed from the Podman process into the container during image pulls and builds.
+
+Set to `true` to enable proxy inheritance (default Podman behavior) or `false` to disable it.
+This option is particularly useful on systems that require proxy configuration for internet access but don’t want proxy settings passed to the container runtime.
+
+Equivalent to the Podman `--http-proxy` option.
+
+### Image=
+
+The image to run in the container.
+It is recommended to use a fully qualified image name rather than a short name, both for
+performance and robustness reasons.
+
+The format of the name is the same as when passed to `podman pull`. So, it supports using
+`:tag` or digests to guarantee the specific image version.
+
+Special Cases:
+
+- If the `name` of the image ends with `.image`, Quadlet will use the image pulled by the corresponding `.image` file, and the generated systemd service contains a dependency on the `$name-image.service` (or the service name set in the .image file). Note that the corresponding `.image` file must exist.
+
+- If the `name` of the image ends with `.build`, Quadlet will use the image built by the corresponding `.build` file, and the generated systemd service contains a dependency on the `$name-build.service`. Note: the corresponding `.build` file must exist.
+
+### IP=
+
+Specify a static IPv4 address for the container, for example **10.88.64.128**.
+Equivalent to the Podman `--ip` option.
+
+### IP6=
+
+Specify a static IPv6 address for the container, for example **fd46:db93:aa76:ac37::10**.
+Equivalent to the Podman `--ip6` option.
+
+### Label=
+
+Set one or more OCI labels on the container. The format is a list of `key=value` items,
+similar to `Environment`.
+
+This key can be listed multiple times.
+
+### LogDriver=
+
+Set the log-driver used by Podman when running the container.
+Equivalent to the Podman `--log-driver` option.
+
+### LogOpt=
+
+Set the log-opt (logging options) used by Podman when running the container.
+Equivalent to the Podman `--log-opt` option.
+This key can be listed multiple times.
+
+### Mask=
+
+Specify the paths to mask separated by a colon. `Mask=/path/1:/path/2`. A masked path cannot be accessed inside the container.
+
+### Memory=
+
+Specify the amount of memory for the container.
+
+### Mount=
+
+Attach a filesystem mount to the container.
+This is equivalent to the Podman `--mount` option, and
+generally has the form `type=TYPE,TYPE-SPECIFIC-OPTION[,...]`.
+
+Special cases:
+
+- For `type=volume`, if `source` ends with `.volume`, the Podman named volume generated by the corresponding `.volume` file is used.
+
+- For `type=image`, if `source` ends with `.image`, the image generated by the corresponding `.image` file is used.
+
+In both cases, the generated systemd service will contain a dependency on the service generated for the corresponding unit. Note: the corresponding `.volume` or `.image` file must exist.
+
+This key can be listed multiple times.
+
+### Network=
+
+Specify a custom network for the container. This has the same format as the `--network` option
+to `podman run`. For example, use `host` to use the host network in the container, or `none` to
+not set up networking in the container.
+
+Special cases:
+
+- If the `name` of the network ends with `.network`, a Podman network called
+  `systemd-$name` is used, and the generated systemd service contains
+  a dependency on the `$name-network.service`. Such a network can be automatically
+  created by using a `$name.network` Quadlet file. Note: the corresponding `.network` file must exist.
+
+- If the `name` ends with `.container`,
+  the container will reuse the network stack of another container created by `$name.container`.
+  The generated systemd service contains a dependency on `$name.service`. Note: the corresponding `.container` file must exist.
+
+This key can be listed multiple times.
+
+### NetworkAlias=
+
+Add a network-scoped alias for the container. This has the same format as the `--network-alias`
+option to `podman run`. Aliases can be used to group containers together in DNS resolution: for
+example, setting `NetworkAlias=web` on multiple containers will make a DNS query for `web` resolve
+to all the containers with that alias.
+
+This key can be listed multiple times.
+
+### NoNewPrivileges=
+
+If enabled, this disables the container processes from gaining additional privileges via things like
+setuid and file capabilities.
+
+### Notify=
+
+By default, Podman is run in such a way that the systemd startup notify command is handled by
+the container runtime. In other words, the service is deemed started when the container runtime
+starts the child in the container. However, if the container application supports
+[sd\_notify](https://www.freedesktop.org/software/systemd/man/sd_notify.html), then setting
+`Notify` to true passes the notification details to the container allowing it to notify
+of startup on its own.
+
+In addition, setting `Notify` to `healthy` will postpone startup notifications until such time as
+the container is marked healthy, as determined by Podman healthchecks. Note that this requires
+setting up a container healthcheck, see the `HealthCmd` option for more.
+
+### PidsLimit=
+
+Tune the container’s pids limit.
+This is equivalent to the Podman `--pids-limit` option.
+
+### Pod=
+
+Specify a Quadlet `.pod` unit to link the container to.
+The value must take the form of `<name>.pod` and the `.pod` unit must exist.
+
+Quadlet will add all the necessary parameters to link between the container and the pod and between their corresponding services.
+
+### PodmanArgs=
+
+This key contains a list of arguments passed directly to the end of the `podman run` command
+in the generated file (right before the image name in the command line). It can be used to
+access Podman features otherwise unsupported by the generator. Since the generator is unaware
+of what unexpected interactions can be caused by these arguments, it is not recommended to use
+this option.
+
+The format of this is a space separated list of arguments, which can optionally be individually
+escaped to allow inclusion of whitespace and other control characters.
+
+This key can be listed multiple times.
+
+### PublishPort=
+
+Exposes a port, or a range of ports (e.g. `50-59`), from the container to the host. Equivalent
+to the Podman `--publish` option. The format is similar to the Podman options, which is of
+the form `ip:hostPort:containerPort`, `ip::containerPort`, `hostPort:containerPort` or
+`containerPort`, where the number of host and container ports must be the same (in the case
+of a range).
+
+If the IP is set to 0.0.0.0 or not set at all, the port is bound on all IPv4 addresses on
+the host; use \[::\] for IPv6.
+
+Note that not listing a host port means that Podman automatically selects one, and it
+may be different for each invocation of service. This makes that a less useful option. The
+allocated port can be found with the `podman port` command.
+
+This key can be listed multiple times.
+
+### Pull=
+
+Set the image pull policy.
+This is equivalent to the Podman `--pull` option
+
+### ReadOnly=
+
+If enabled, makes the image read-only.
+
+### ReadOnlyTmpfs=
+
+If ReadOnly is set to `true`, mount a read-write tmpfs on /dev, /dev/shm, /run, /tmp, and /var/tmp.
+
+### ReloadCmd=
+
+Add `ExecReload` line to the `Service` that runs ` podman exec` with this command in this container.
+
+In order to execute the reload run `systemctl reload <Service>`
+
+Mutually exclusive with `ReloadSignal`
+
+### ReloadSignal=
+
+Add `ExecReload` line to the `Service` that runs `podman kill` with this signal which sends the signal to the main container process.
+
+In order to execute the reload run `systemctl reload <Service>`
+
+Mutually exclusive with `ReloadCmd`
+
+### Retry=
+
+Number of times to retry the image pull when a HTTP error occurs. Equivalent to the Podman `--retry` option.
+
+### RetryDelay=
+
+Delay between retries. Equivalent to the Podman `--retry-delay` option.
+
+### Rootfs=
+
+The rootfs to use for the container. Rootfs points to a directory on the system that contains the content to be run within the container. This option conflicts with the `Image` option.
+
+The format of the rootfs is the same as when passed to `podman run --rootfs`, so it supports overlay mounts as well.
+
+Note: On SELinux systems, the rootfs needs the correct label, which is by default unconfined\_u:object\_r:container\_file\_t:s0.
+
+### RunInit=
+
+If enabled, the container has a minimal init process inside the
+container that forwards signals and reaps processes.
+
+### SeccompProfile=
+
+Set the seccomp profile to use in the container. If unset, the default podman profile is used.
+Set to either the pathname of a JSON file, or `unconfined` to disable the seccomp filters.
+
+### Secret=
+
+Use a Podman secret in the container either as a file or an environment variable.
+This is equivalent to the Podman `--secret` option and generally has the form `secret[,opt=opt ...]`
+
+### SecurityLabelDisable=
+
+Turn off label separation for the container.
+
+### SecurityLabelFileType=
+
+Set the label file type for the container files.
+
+### SecurityLabelLevel=
+
+Set the label process level for the container processes.
+
+### SecurityLabelNested=
+
+Allow SecurityLabels to function within the container. This allows separation of containers created within the container.
+
+### SecurityLabelType=
+
+Set the label process type for the container processes.
+
+### ShmSize=
+
+Size of /dev/shm.
+
+This is equivalent to the Podman `--shm-size` option and generally has the form `number[unit]`
+
+### StartWithPod=
+
+Start the container after the associated pod is created. Default to **true**.
+
+If `true`, container will be started/stopped/restarted alongside the pod.
+
+If `false`, the container will not be started when the pod starts. The container will be stopped with the pod. Restarting the pod will also restart the container as long as the container was also running before.
+
+Note, the container can still be started manually or through a target by configuring the `[Install]` section. The pod will be started as needed in any case.
+
+### StopSignal=
+
+Signal to stop a container. Default is **SIGTERM**.
+
+This is equivalent to the Podman `--stop-signal` option
+
+### StopTimeout=
+
+Seconds to wait before forcibly stopping the container.
+
+Note, this value should be lower than the actual systemd unit timeout to make sure the podman rm command is not killed by systemd.
+
+This is equivalent to the Podman `--stop-timeout` option
+
+### SubGIDMap=
+
+Run the container in a new user namespace using the map with name in the /etc/subgid file.
+Equivalent to the Podman `--subgidname` option.
+
+### SubUIDMap=
+
+Run the container in a new user namespace using the map with name in the /etc/subuid file.
+Equivalent to the Podman `--subuidname` option.
+
+### Sysctl=
+
+Configures namespaced kernel parameters for the container. The format is `Sysctl=name=value`.
+
+This is a space separated list of kernel parameters. This key can be listed multiple times.
+
+For example:
+
+```
+Sysctl=net.ipv6.conf.all.disable_ipv6=1 net.ipv6.conf.all.use_tempaddr=1
+
+```
+
+### Timezone=
+
+The timezone to run the container in.
+
+### Tmpfs=
+
+Mount a tmpfs in the container. This is equivalent to the Podman `--tmpfs` option, and
+generally has the form `CONTAINER-DIR[:OPTIONS]`.
+
+This key can be listed multiple times.
+
+### UIDMap=
+
+Run the container in a new user namespace using the supplied UID mapping.
+Equivalent to the Podman `--uidmap` option.
+
+This key can be listed multiple times.
+
+### Ulimit=
+
+Ulimit options. Sets the ulimits values inside of the container.
+
+This key can be listed multiple times.
+
+### Unmask=
+
+Specify the paths to unmask separated by a colon. unmask=ALL or /path/1:/path/2, or shell expanded paths (/proc/\*):
+
+If set to `ALL`, Podman will unmask all the paths that are masked or made read-only by default.
+
+The default masked paths are /proc/acpi, /proc/kcore, /proc/keys, /proc/latency\_stats, /proc/sched\_debug, /proc/scsi, /proc/timer\_list, /proc/timer\_stats, /sys/firmware, and /sys/fs/selinux.
+
+The default paths that are read-only are /proc/asound, /proc/bus, /proc/fs, /proc/irq, /proc/sys, /proc/sysrq-trigger, /sys/fs/cgroup.
+
+### User=
+
+The (numeric) UID to run as inside the container. This does not need to match the UID on the host,
+which can be modified with `UserNS`, but if that is not specified, this UID is also used on the host.
+
+Note: when both `User=` and `Group=` are specified, they are combined into a single `--user USER:GROUP`
+argument passed to Podman.
+
+### UserNS=
+
+Set the user namespace mode for the container. This is equivalent to the Podman `--userns` option and
+generally has the form `MODE[:OPTIONS,...]`.
+
+### Volume=
+
+Mount a volume in the container. This is equivalent to the Podman `--volume` option, and
+generally has the form `[[SOURCE-VOLUME|HOST-DIR:]CONTAINER-DIR[:OPTIONS]]`.
+
+If `SOURCE-VOLUME` starts with `.`, Quadlet resolves the path relative to the location of the unit file.
+
+Special case:
+
+- If `SOURCE-VOLUME` ends with `.volume`, a Podman named volume called `systemd-$name` is used as the source, and the generated systemd service contains a dependency on the `$name-volume.service`. Note that the corresponding `.volume` file must exist.
+
+This key can be listed multiple times.
+
+### WorkingDir=
+
+Working directory inside the container.
+
+The default working directory for running binaries within a container is the root directory (/). The image developer can set a different default with the WORKDIR instruction. This option overrides the working directory by using the -w option.
+

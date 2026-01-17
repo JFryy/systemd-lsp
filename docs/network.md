@@ -1,281 +1,147 @@
 # [Network] Section
 
-The `[Network]` section describes a Podman network that will be created and managed by systemd using Podman Quadlet. Networks allow containers and pods to communicate with each other and control external network access. Network units use the `.network` file extension and are automatically converted into systemd service units.
+Network files are named with a `.network` extension and contain a section `[Network]` describing the
+named Podman network. The generated service is a one-time command that ensures that the network
+exists on the host, creating it if needed.
+
+By default, the Podman network has the same name as the unit, but with a `systemd-` prefix, i.e. for
+a network file named `$NAME.network`, the generated Podman network is called `systemd-$NAME`, and
+the generated service file is `$NAME-network.service`. The `NetworkName` option allows for
+overriding this default name with a user-provided one.
+
+Please note that stopping the corresponding service will not remove the podman network.
+In addition, updating an existing network is not supported.
+In order to update the network parameters you will first need to manually remove the podman network and then restart the service.
+
+Using network units allows containers to depend on networks being automatically pre-created. This is
+particularly interesting when using special options to control network creation, as Podman otherwise creates networks with the default options.
+
+Valid options for `[Network]` are listed below:
 
 *Based on [podman-systemd.unit(5)](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html) official documentation.*
 
-## Basic Configuration
+### ContainersConfModule=
 
-### NetworkName=
-Specifies the optional Podman network name, overriding the default naming convention.
+Load the specified containers.conf(5) module. Equivalent to the Podman `--module` option.
 
-**Default:** `systemd-%N` (where %N is the unit filename without extension)
-
-**Example:** `NetworkName=myapp-network`
-
-### Driver=
-Specifies the driver managing the network.
-
-**Supported Drivers:**
-- `bridge` (default)
-- `macvlan`
-- `ipvlan`
-
-**Default:** `bridge`
-
-**Example:** `Driver=bridge`
-
-## Network Addressing
-
-### Subnet=
-Specifies the subnet in CIDR notation.
-
-**Format:** CIDR notation (e.g., `10.88.0.0/16`)
-
-**Multiple:** Yes
-
-**Example:**
-- `Subnet=10.88.0.0/16`
-- `Subnet=fd00:dead:beef::/48` (IPv6)
-
-### Gateway=
-Defines a gateway for the subnet.
-
-**Format:** IP address
-
-**Requirement:** Requires a subnet to also be provided via the `Subnet=` directive
-
-**Multiple:** Yes
-
-**Example:** `Gateway=10.88.0.1`
-
-### IPRange=
-Allocates container IPs from a specified range.
-
-**Format:**
-- CIDR notation (e.g., `10.88.0.0/24`)
-- Range syntax: `<startIP>-<endIP>`
-
-**Requirement:** Must be used with `Subnet=` directive
-
-**Multiple:** Yes
-
-**Example:**
-- `IPRange=10.88.0.0/24`
-- `IPRange=10.88.0.10-10.88.0.100`
-
-## IPv6 Support
-
-### IPv6=
-Enables IPv6 (Dual Stack) networking for the network.
-
-**Format:** `true` or `false`
-
-**Example:** `IPv6=true`
-
-## DNS Configuration
-
-### DNS=
-Sets network-scoped DNS resolver or nameserver for containers operating within this network.
-
-**Format:** IP address
-
-**Multiple:** Yes
-
-**Example:** `DNS=8.8.8.8`
+This key can be listed multiple times.
 
 ### DisableDNS=
-Disables the DNS plugin for the network when enabled.
 
-**Format:** `true` or `false`
+If enabled, disables the DNS plugin for this network.
 
-**Default:** `false`
+This is equivalent to the Podman `--disable-dns` option
 
-**Example:** `DisableDNS=false`
+### DNS=
 
-## Network Isolation
+Set network-scoped DNS resolver/nameserver for containers in this network.
 
-### Internal=
-Restricts external access to this network when enabled.
+This key can be listed multiple times.
 
-**Format:** `true` or `false`
+### Driver=
 
-**Default:** `false`
+Driver to manage the network. Currently `bridge`, `macvlan` and `ipvlan` are supported.
 
-**Example:** `Internal=true`
+This is equivalent to the Podman `--driver` option
 
-### NetworkDeleteOnStop=
-When enabled, the network is removed when the service stops.
+### Gateway=
 
-**Format:** `true` or `false`
+Define a gateway for the subnet. If you want to provide a gateway address, you must also provide a subnet option.
 
-**Default:** `false`
+This is equivalent to the Podman `--gateway` option
 
-**Example:** `NetworkDeleteOnStop=true`
-
-## Advanced Configuration
-
-### InterfaceName=
-Maps the network interface option in network configuration.
-
-**Driver-Specific Behavior:**
-- **bridge:** Uses the bridge interface name
-- **macvlan/ipvlan:** Designates the parent device
-
-**Example:**
-- `InterfaceName=br0` (bridge)
-- `InterfaceName=eth0` (macvlan/ipvlan parent)
-
-### IPAMDriver=
-Sets the IP Address Management Driver for the network.
-
-**Supported Options:**
-- `host-local`
-- `dhcp`
-- `none`
-
-**Example:** `IPAMDriver=host-local`
-
-### Options=
-Sets driver-specific options.
-
-**Format:** Option string
-
-**Example:** `Options=mtu=1500`
-
-## Metadata
-
-### Label=
-Sets one or more OCI labels on the network.
-
-**Format:** `key=value` format, similar to environment variables
-
-**Multiple:** Yes
-
-**Example:** `Label=environment=production tier=backend`
-
-## Advanced Options
-
-### ContainersConfModule=
-Loads a specified containers.conf(5) module.
-
-**Format:** Path to module file
-
-**Multiple:** Yes
+This key can be listed multiple times.
 
 ### GlobalArgs=
-Contains arguments passed directly between `podman` and `network` in the generated file.
 
-**Format:** Space-separated format with optional escaping
+This key contains a list of arguments passed directly between `podman` and `network`
+in the generated file. It can be used to access Podman features otherwise unsupported by the generator. Since the generator is unaware
+of what unexpected interactions can be caused by these arguments, it is not recommended to use
+this option.
 
-**Multiple:** Yes
+The format of this is a space separated list of arguments, which can optionally be individually
+escaped to allow inclusion of whitespace and other control characters.
 
-**Note:** Not recommended for general use due to unpredictable interactions
+This key can be listed multiple times.
+
+### InterfaceName=
+
+This option maps the _network\_interface_ option in the network config, see **podman network inspect**.
+Depending on the driver, this can have different effects; for `bridge`, it uses the bridge interface name.
+For `macvlan` and `ipvlan`, it is the parent device on the host. It is the same as `--opt parent=...`.
+
+This is equivalent to the Podman `--interface-name` option.
+
+### Internal=
+
+Restrict external access of this network.
+
+This is equivalent to the Podman `--internal` option
+
+### IPAMDriver=
+
+Set the ipam driver (IP Address Management Driver) for the network. Currently `host-local`, `dhcp` and `none` are supported.
+
+This is equivalent to the Podman `--ipam-driver` option
+
+### IPRange=
+
+Allocate container IP from a range. The range must be a either a complete subnet in CIDR notation or be
+in the `<startIP>-<endIP>` syntax which allows for a more flexible range compared to the CIDR subnet.
+The ip-range option must be used with a subnet option.
+
+This is equivalent to the Podman `--ip-range` option
+
+This key can be listed multiple times.
+
+### IPv6=
+
+Enable IPv6 (Dual Stack) networking.
+
+This is equivalent to the Podman `--ipv6` option
+
+### Label=
+
+Set one or more OCI labels on the network. The format is a list of
+`key=value` items, similar to `Environment`.
+
+This key can be listed multiple times.
+
+### NetworkDeleteOnStop=
+
+When set to `true` the network is deleted when the service is stopped
+
+### NetworkName=
+
+The (optional) name of the Podman network.
+If this is not specified, the default value is the same name as the unit, but with a `systemd-` prefix,
+i.e. a `$name.network` file creates a `systemd-$name` Podman network to avoid
+conflicts with user-managed network.
+
+### Options=
+
+Set driver specific options.
+
+This is equivalent to the Podman `--opt` option
 
 ### PodmanArgs=
-Contains arguments passed directly to the end of the `podman network create` command, before the network name.
 
-**Format:** Space-separated format with optional escaping
+This key contains a list of arguments passed directly to the end of the `podman network create` command
+in the generated file (right before the name of the network in the command line). It can be used to
+access Podman features otherwise unsupported by the generator. Since the generator is unaware
+of what unexpected interactions can be caused by these arguments, is not recommended to use
+this option.
 
-**Multiple:** Yes
+The format of this is a space separated list of arguments, which can optionally be individually
+escaped to allow inclusion of whitespace and other control characters.
 
-**Note:** Not recommended for general use
+This key can be listed multiple times.
 
-## Example: Basic Bridge Network
+### Subnet=
 
-```ini
-[Unit]
-Description=Application bridge network
+The subnet in CIDR notation.
 
-[Network]
-NetworkName=myapp-net
-Driver=bridge
-Subnet=10.88.0.0/16
-Gateway=10.88.0.1
-DNS=8.8.8.8
-DNS=8.8.4.4
-Label=app=myapp
+This is equivalent to the Podman `--subnet` option
 
-[Install]
-WantedBy=multi-user.target
-```
+This key can be listed multiple times.
 
-## Example: Internal Network
-
-```ini
-[Unit]
-Description=Internal database network
-
-[Network]
-NetworkName=db-internal
-Driver=bridge
-Subnet=172.20.0.0/16
-Gateway=172.20.0.1
-Internal=true
-Label=tier=database security=internal
-
-[Install]
-WantedBy=multi-user.target
-```
-
-## Example: IPv6 Dual Stack Network
-
-```ini
-[Unit]
-Description=Dual stack network
-
-[Network]
-NetworkName=dualstack-net
-Driver=bridge
-Subnet=10.89.0.0/16
-Subnet=fd00:dead:beef::/48
-Gateway=10.89.0.1
-Gateway=fd00:dead:beef::1
-IPv6=true
-
-[Install]
-WantedBy=multi-user.target
-```
-
-## Example: macvlan Network
-
-```ini
-[Unit]
-Description=macvlan network on eth0
-
-[Network]
-NetworkName=macvlan-net
-Driver=macvlan
-InterfaceName=eth0
-Subnet=192.168.1.0/24
-Gateway=192.168.1.1
-IPRange=192.168.1.200-192.168.1.250
-
-[Install]
-WantedBy=multi-user.target
-```
-
-## Using Networks in Containers and Pods
-
-Reference network units from container or pod units:
-
-```ini
-# myapp.container
-[Container]
-Image=docker.io/myapp:latest
-Network=myapp-net.network
-
-# Or in a pod
-# myapp.pod
-[Pod]
-Network=myapp-net.network
-```
-
-The LSP will automatically create service dependencies when using `.network` references.
-
-## See Also
-
-- [podman-systemd.unit(5)](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html)
-- [podman-network(1)](https://docs.podman.io/en/latest/markdown/podman-network.1.html)
-- [podman-network-create(1)](https://docs.podman.io/en/latest/markdown/podman-network-create.1.html)
-- systemd.unit(5)

@@ -12,8 +12,8 @@ IP6
 Label
 Network
 NetworkAlias
-PodmanArgs
 PodName
+PodmanArgs
 PublishPort
 ServiceName
 ShmSize

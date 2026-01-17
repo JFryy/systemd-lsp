@@ -1,206 +1,109 @@
 # [Volume] Section
 
-The `[Volume]` section describes a Podman volume that will be created and managed by systemd using Podman Quadlet. Volumes provide persistent storage for containers that survives container restarts and deletions. Volume units use the `.volume` file extension and are automatically converted into systemd service units.
+Volume files are named with a `.volume` extension and contain a section `[Volume]` describing the
+named Podman volume. The generated service is a one-time command that ensures that the volume
+exists on the host, creating it if needed.
+
+By default, the Podman volume has the same name as the unit, but with a `systemd-` prefix, i.e. for
+a volume file named `$NAME.volume`, the generated Podman volume is called `systemd-$NAME`, and the
+generated service file is `$NAME-volume.service`. The `VolumeName` option allows for overriding this
+default name with a user-provided one.
+
+Using volume units allows containers to depend on volumes being automatically pre-created. This is
+particularly interesting when using special options to control volume creation,
+as Podman otherwise creates volumes with the default options.
+
+Valid options for `[Volume]` are listed below:
 
 *Based on [podman-systemd.unit(5)](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html) official documentation.*
 
-## Basic Configuration
+### ContainersConfModule=
 
-### VolumeName=
-Allows custom naming of the Podman volume.
+Load the specified containers.conf(5) module. Equivalent to the Podman `--module` option.
 
-**Default:** `systemd-%N` (where %N is the unit filename without extension)
-
-**Note:** Avoids naming conflicts with user-managed volumes
-
-**Example:** `VolumeName=myapp-data`
-
-## Storage Configuration
-
-### Driver=
-Designates which volume driver manages the storage backend.
-
-**Format:** Driver name
-
-**Supported Drivers:**
-- Default driver
-- `image` - Uses container image as volume source (requires `Image=` directive)
-- Other specialized drivers
-
-**Example:** `Driver=image`
-
-### Device=
-Specifies a device path that will be mounted to provide the volume storage.
-
-**Format:** Device path
-
-**Example:** `Device=/dev/sda1`
-
-### Type=
-Determines the filesystem type for the specified device during mounting operations.
-
-**Format:** Filesystem type identifier (same as mount(8) `-t` option)
-
-**Example:** `Type=ext4`
-
-### Options=
-Passes mount command options controlling filesystem behavior and mounting characteristics.
-
-**Format:** Mount options as used by mount(8) `-o` option
-
-**Example:** `Options=noatime,nodiratime`
-
-## Image-Based Volumes
-
-### Image=
-Identifies the container image serving as the volume's foundation when driver is `image`.
-
-**Format:** Image reference with optional tag/digest
-
-**Recommendation:** Use fully-qualified names for performance and robustness
-
-**Special Case:** If name ends with `.image`, the referenced `.image` file's built image is used with automatic service dependency
-
-**Example:**
-- `Image=docker.io/nginx:latest`
-- `Image=myimage.image`
+This key can be listed multiple times.
 
 ### Copy=
-Controls whether content from the image at the volume's mountpoint is duplicated into the volume upon initial creation.
 
-**Format:** `true` or `false`
+If enabled, the content of the image located at the mountpoint of the volume is copied into the
+volume on the first run.
 
-**Default:** `true`
+### Device=
 
-**Note:** The content of the image located at the mountpoint of the volume is copied into the volume on the first run
+The path of a device which is mounted for the volume.
 
-## Permissions
+### Driver=
 
-### User=
-Establishes ownership of the volume through either numeric UID or username.
+Specify the volume driver name. When set to `image`, the `Image` key must also be set.
 
-**Format:** Numeric UID or user name
-
-**Example:**
-- `User=1000`
-- `User=myuser`
-
-### Group=
-Assigns group ownership of the volume using either numeric GID or group name.
-
-**Format:** Numeric GID or group name
-
-**Example:**
-- `Group=1000`
-- `Group=mygroup`
-
-## Metadata
-
-### Label=
-Attaches OCI metadata labels to the volume using key-value pairs.
-
-**Format:** `key=value` format similar to environment variables
-
-**Multiple:** Yes
-
-**Example:** `Label=purpose=database backup=daily`
-
-## Advanced Options
-
-### ContainersConfModule=
-Loads a specified containers.conf module for volume operations.
-
-**Format:** Path to module file
-
-**Multiple:** Yes
+This is equivalent to the Podman `--driver` option.
 
 ### GlobalArgs=
-Provides access to podman options not otherwise exposed through Quadlet directives by passing arguments directly between podman and volume command.
 
-**Format:** Space-separated argument list with optional escape sequences
+This key contains a list of arguments passed directly between `podman` and `volume`
+in the generated file. It can be used to access Podman features otherwise unsupported by the generator. Since the generator is unaware
+of what unexpected interactions can be caused by these arguments, it is not recommended to use
+this option.
 
-**Multiple:** Yes
+The format of this is a space separated list of arguments, which can optionally be individually
+escaped to allow inclusion of whitespace and other control characters.
 
-**Note:** Not recommended to use this option
+This key can be listed multiple times.
+
+### Group=
+
+The host (numeric) GID, or group name to use as the group for the volume
+
+### Image=
+
+Specifies the image the volume is based on when `Driver` is set to the `image`.
+It is recommended to use a fully qualified image name rather than a short name, both for
+performance and robustness reasons.
+
+The format of the name is the same as when passed to `podman pull`. So, it supports using
+`:tag` or digests to guarantee the specific image version.
+
+Special case:
+
+- If the `name` of the image ends with `.image`, Quadlet will use the image
+  pulled by the corresponding `.image` file, and the generated systemd service contains a dependency on the `$name-image.service` (or the service name set in the .image file). Note: the corresponding `.image` file must exist.
+
+### Label=
+
+Set one or more OCI labels on the volume. The format is a list of
+`key=value` items, similar to `Environment`.
+
+This key can be listed multiple times.
+
+### Options=
+
+The mount options to use for a filesystem as used by the **mount(8)** command `-o` option.
 
 ### PodmanArgs=
-Injects arguments directly preceding the volume name in the podman volume create command for unsupported features.
 
-**Format:** Space-separated argument list with optional escape sequences
+This key contains a list of arguments passed directly to the end of the `podman volume create` command
+in the generated file (right before the name of the volume in the command line). It can be used to
+access Podman features otherwise unsupported by the generator. Since the generator is unaware
+of what unexpected interactions can be caused by these arguments, is not recommended to use
+this option.
 
-**Multiple:** Yes
+The format of this is a space separated list of arguments, which can optionally be individually
+escaped to allow inclusion of whitespace and other control characters.
 
-**Note:** Not recommended to use this option
+This key can be listed multiple times.
 
-## Example: Basic Volume
+### Type=
 
-```ini
-[Unit]
-Description=Application data volume
+The filesystem type of `Device` as used by the **mount(8)** commands `-t` option.
 
-[Volume]
-VolumeName=myapp-data
-User=1000
-Group=1000
-Label=app=myapp type=data
+### User=
 
-[Install]
-WantedBy=multi-user.target
-```
+The host (numeric) UID, or user name to use as the owner for the volume
 
-## Example: Image-Based Volume
+### VolumeName=
 
-```ini
-[Unit]
-Description=Web content volume from image
+The (optional) name of the Podman volume.
+If this is not specified, the default value is the same name as the unit, but with a `systemd-` prefix,
+i.e. a `$name.volume` file creates a `systemd-$name` Podman volume to avoid
+conflicts with user-managed volumes.
 
-[Volume]
-VolumeName=web-content
-Driver=image
-Image=docker.io/nginx:latest
-Copy=true
-User=nginx
-Group=nginx
-
-[Install]
-WantedBy=multi-user.target
-```
-
-## Example: Device-Based Volume
-
-```ini
-[Unit]
-Description=External storage volume
-
-[Volume]
-VolumeName=external-data
-Device=/dev/sdb1
-Type=ext4
-Options=noatime,nodiratime
-User=1000
-Group=1000
-
-[Install]
-WantedBy=multi-user.target
-```
-
-## Using Volumes in Containers
-
-Reference volume units from container or pod units:
-
-```ini
-# myapp.container
-[Container]
-Image=docker.io/myapp:latest
-Volume=myapp-data.volume:/data
-```
-
-The LSP will automatically create service dependencies when using `.volume` references.
-
-## See Also
-
-- [podman-systemd.unit(5)](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html)
-- [podman-volume(1)](https://docs.podman.io/en/latest/markdown/podman-volume.1.html)
-- [podman-volume-create(1)](https://docs.podman.io/en/latest/markdown/podman-volume-create.1.html)
-- systemd.unit(5)
-- mount(8)

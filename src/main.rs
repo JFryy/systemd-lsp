@@ -328,7 +328,7 @@ impl SystemdLanguageServer {
                 return Some(Hover {
                     contents: HoverContents::Markup(MarkupContent {
                         kind: MarkupKind::Markdown,
-                        value: full_docs,
+                        value: Self::truncate_documentation(&full_docs),
                     }),
                     range: None,
                 });
@@ -340,7 +340,7 @@ impl SystemdLanguageServer {
                 return Some(Hover {
                     contents: HoverContents::Markup(MarkupContent {
                         kind: MarkupKind::Markdown,
-                        value: docs,
+                        value: Self::truncate_documentation(&docs),
                     }),
                     range: None,
                 });
@@ -356,7 +356,7 @@ impl SystemdLanguageServer {
                 return Some(Hover {
                     contents: HoverContents::Markup(MarkupContent {
                         kind: MarkupKind::Markdown,
-                        value: docs,
+                        value: Self::truncate_documentation(&docs),
                     }),
                     range: None,
                 });
@@ -375,6 +375,36 @@ impl SystemdLanguageServer {
         }
 
         None
+    }
+
+    /// Truncate documentation to a reasonable size for hover display
+    fn truncate_documentation(docs: &str) -> String {
+        const MAX_LINES: usize = 50;
+        const MAX_CHARS: usize = 4000;
+
+        let lines: Vec<&str> = docs.lines().collect();
+
+        // Check if truncation is needed
+        if lines.len() <= MAX_LINES && docs.len() <= MAX_CHARS {
+            return docs.to_string();
+        }
+
+        // Truncate by lines first
+        let truncated_lines: Vec<&str> = lines.iter().take(MAX_LINES).copied().collect();
+        let mut result = truncated_lines.join("\n");
+
+        // Then truncate by characters if still too long
+        if result.len() > MAX_CHARS {
+            result.truncate(MAX_CHARS);
+            // Try to truncate at a word boundary
+            if let Some(last_space) = result.rfind(' ') {
+                result.truncate(last_space);
+            }
+        }
+
+        // Add ellipsis to indicate truncation
+        result.push_str("\n\n---\n*Documentation truncated. Use 'Go to Definition' for full details.*");
+        result
     }
 
     fn get_section_documentation(&self, section_name: &str) -> Option<String> {

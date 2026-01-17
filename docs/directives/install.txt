@@ -1,5 +1,6 @@
-WantedBy
-RequiredBy
 Alias
 Also
 DefaultInstance
+RequiredBy
+UpheldBy
+WantedBy

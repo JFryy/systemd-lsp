@@ -21,7 +21,7 @@ Retry
 RetryDelay
 Secret
 SetWorkingDirectory
-Target
 TLSVerify
+Target
 Variant
 Volume
