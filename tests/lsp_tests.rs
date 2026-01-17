@@ -172,15 +172,18 @@ mod documentation_tests {
             }
         }
 
+        let total = SystemdConstants::valid_sections().len();
+        let coverage = ((total - missing.len()) as f64 / total as f64) * 100.0;
+        println!("\nSection Coverage: {}/{} ({:.1}%)", total - missing.len(), total, coverage);
+
         if !missing.is_empty() {
-            let total = SystemdConstants::valid_sections().len();
-            let coverage = ((total - missing.len()) as f64 / total as f64) * 100.0;
-            println!("\nSection Coverage: {}/{} ({:.1}%)", total - missing.len(), total, coverage);
             println!("Missing sections:");
             for s in &missing {
                 println!("  - {}", s);
             }
             panic!("{} sections missing documentation", missing.len());
+        } else {
+            println!("✓ All sections have documentation!");
         }
     }
 
@@ -201,9 +204,10 @@ mod documentation_tests {
             }
         }
 
+        let coverage = ((total - missing.len()) as f64 / total as f64) * 100.0;
+        println!("\nDirective Coverage: {}/{} ({:.1}%)", total - missing.len(), total, coverage);
+
         if !missing.is_empty() {
-            let coverage = ((total - missing.len()) as f64 / total as f64) * 100.0;
-            println!("\nDirective Coverage: {}/{} ({:.1}%)", total - missing.len(), total, coverage);
             println!("Missing ({}):", missing.len());
             for d in missing.iter().take(10) {
                 println!("  - {}", d);
@@ -212,6 +216,8 @@ mod documentation_tests {
                 println!("  ... and {} more", missing.len() - 10);
             }
             panic!("{} directives missing documentation", missing.len());
+        } else {
+            println!("✓ All directives have documentation!");
         }
     }
 }

@@ -37,9 +37,9 @@ HealthStartupTimeout
 HealthTimeout
 HostName
 HttpProxy
-Image
 IP
 IP6
+Image
 Label
 LogDriver
 LogOpt

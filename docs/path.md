@@ -1,288 +1,315 @@
 # [Path] Section
 
-The `[Path]` section contains path-specific settings. Path units are used to activate other units when file system objects change or are accessed. This provides a more efficient alternative to cron jobs for file system monitoring tasks.
+A unit configuration file whose name ends in
+" `.path`" encodes information about a path
+monitored by systemd, for path-based activation.
 
-## Path Monitoring Types
+This man page lists the configuration options specific to
+this unit type. See
+[systemd.unit(5)](systemd.unit.html#)
+for the common options of all unit configuration files. The common
+configuration items are configured in the generic \[Unit\] and
+\[Install\] sections. The path specific configuration options are
+configured in the \[Path\] section.
+
+For each path file, a matching unit file must exist,
+describing the unit to activate when the path changes. By default,
+a service by the same name as the path (except for the suffix) is
+activated. Example: a path file `foo.path`
+activates a matching service `foo.service`. The
+unit to activate may be controlled by `Unit=`
+(see below).
+
+Internally, path units use the
+[inotify(7)](https://man7.org/linux/man-pages/man7/inotify.7.html)
+API to monitor file systems. Due to that, it suffers by the same
+limitations as inotify, and for example cannot be used to monitor
+files or directories changed by other machines on remote NFS file
+systems.
+
+When a service unit triggered by a path unit terminates (regardless whether it exited successfully
+or failed), monitored paths are checked immediately again, and the service accordingly restarted
+instantly. As protection against busy looping in this trigger/start cycle, a start rate limit is enforced
+on the service unit, see `StartLimitIntervalSec=` and
+`StartLimitBurst=` in
+[systemd.unit(5)](systemd.unit.html#). Unlike
+other service failures, the error condition that the start rate limit is hit is propagated from the
+service unit to the path unit and causes the path unit to fail as well, thus ending the loop.
+
+*Based on [systemd.path(5)](https://www.freedesktop.org/software/systemd/man/systemd.path.html) official documentation.*
 
 ### PathExists=
-If the specified absolute path exists, the configured unit is activated. Takes an absolute file system path as argument.
+
+Defines paths to monitor for certain changes:
+`PathExists=` may be used to watch the mere
+existence of a file or directory. If the file specified
+exists, the configured unit is activated.
+`PathExistsGlob=` works similarly, but checks
+for the existence of at least one file matching the globbing
+pattern specified. `PathChanged=` may be used
+to watch a file or directory and activate the configured unit
+whenever it changes. It is not activated on every write to the
+watched file but it is activated if the file which was open
+for writing gets closed. `PathModified=` is
+similar, but additionally it is activated also on simple
+writes to the watched file.
+`DirectoryNotEmpty=` may be used to watch a
+directory and activate the configured unit whenever it
+contains at least one file.
+
+The arguments of these directives must be absolute file
+system paths.
+
+Multiple directives may be combined, of the same and of
+different types, to watch multiple paths. If the empty string
+is assigned to any of these options, the list of paths to
+watch is reset, and any prior assignments of these options
+will not have any effect.
+
+If a path already exists (in case of
+`PathExists=` and
+`PathExistsGlob=`) or a directory already is
+not empty (in case of `DirectoryNotEmpty=`)
+at the time the path unit is activated, then the configured
+unit is immediately activated as well. Something similar does
+not apply to `PathChanged=` and
+`PathModified=`.
+
+If the path itself or any of the containing directories are not accessible,
+**systemd** will watch for permission changes and notice that conditions are satisfied
+when permissions allow that.
+
+Note that files whose name starts with a dot (i.e. hidden files) are generally ignored when
+monitoring these paths.
 
 ### PathExistsGlob=
-Works like PathExists= but checks for the existence of at least one file matching the glob pattern. Takes a glob pattern as argument.
+
+Defines paths to monitor for certain changes:
+`PathExists=` may be used to watch the mere
+existence of a file or directory. If the file specified
+exists, the configured unit is activated.
+`PathExistsGlob=` works similarly, but checks
+for the existence of at least one file matching the globbing
+pattern specified. `PathChanged=` may be used
+to watch a file or directory and activate the configured unit
+whenever it changes. It is not activated on every write to the
+watched file but it is activated if the file which was open
+for writing gets closed. `PathModified=` is
+similar, but additionally it is activated also on simple
+writes to the watched file.
+`DirectoryNotEmpty=` may be used to watch a
+directory and activate the configured unit whenever it
+contains at least one file.
+
+The arguments of these directives must be absolute file
+system paths.
+
+Multiple directives may be combined, of the same and of
+different types, to watch multiple paths. If the empty string
+is assigned to any of these options, the list of paths to
+watch is reset, and any prior assignments of these options
+will not have any effect.
+
+If a path already exists (in case of
+`PathExists=` and
+`PathExistsGlob=`) or a directory already is
+not empty (in case of `DirectoryNotEmpty=`)
+at the time the path unit is activated, then the configured
+unit is immediately activated as well. Something similar does
+not apply to `PathChanged=` and
+`PathModified=`.
+
+If the path itself or any of the containing directories are not accessible,
+**systemd** will watch for permission changes and notice that conditions are satisfied
+when permissions allow that.
+
+Note that files whose name starts with a dot (i.e. hidden files) are generally ignored when
+monitoring these paths.
 
 ### PathChanged=
-If the specified absolute path is modified, the configured unit is activated. This includes changes to the file content, metadata, or the path being created/deleted.
+
+Defines paths to monitor for certain changes:
+`PathExists=` may be used to watch the mere
+existence of a file or directory. If the file specified
+exists, the configured unit is activated.
+`PathExistsGlob=` works similarly, but checks
+for the existence of at least one file matching the globbing
+pattern specified. `PathChanged=` may be used
+to watch a file or directory and activate the configured unit
+whenever it changes. It is not activated on every write to the
+watched file but it is activated if the file which was open
+for writing gets closed. `PathModified=` is
+similar, but additionally it is activated also on simple
+writes to the watched file.
+`DirectoryNotEmpty=` may be used to watch a
+directory and activate the configured unit whenever it
+contains at least one file.
+
+The arguments of these directives must be absolute file
+system paths.
+
+Multiple directives may be combined, of the same and of
+different types, to watch multiple paths. If the empty string
+is assigned to any of these options, the list of paths to
+watch is reset, and any prior assignments of these options
+will not have any effect.
+
+If a path already exists (in case of
+`PathExists=` and
+`PathExistsGlob=`) or a directory already is
+not empty (in case of `DirectoryNotEmpty=`)
+at the time the path unit is activated, then the configured
+unit is immediately activated as well. Something similar does
+not apply to `PathChanged=` and
+`PathModified=`.
+
+If the path itself or any of the containing directories are not accessible,
+**systemd** will watch for permission changes and notice that conditions are satisfied
+when permissions allow that.
+
+Note that files whose name starts with a dot (i.e. hidden files) are generally ignored when
+monitoring these paths.
 
 ### PathModified=
-Similar to PathChanged= but only watches for content changes (writes), not metadata changes like permission or ownership changes.
+
+Defines paths to monitor for certain changes:
+`PathExists=` may be used to watch the mere
+existence of a file or directory. If the file specified
+exists, the configured unit is activated.
+`PathExistsGlob=` works similarly, but checks
+for the existence of at least one file matching the globbing
+pattern specified. `PathChanged=` may be used
+to watch a file or directory and activate the configured unit
+whenever it changes. It is not activated on every write to the
+watched file but it is activated if the file which was open
+for writing gets closed. `PathModified=` is
+similar, but additionally it is activated also on simple
+writes to the watched file.
+`DirectoryNotEmpty=` may be used to watch a
+directory and activate the configured unit whenever it
+contains at least one file.
+
+The arguments of these directives must be absolute file
+system paths.
+
+Multiple directives may be combined, of the same and of
+different types, to watch multiple paths. If the empty string
+is assigned to any of these options, the list of paths to
+watch is reset, and any prior assignments of these options
+will not have any effect.
+
+If a path already exists (in case of
+`PathExists=` and
+`PathExistsGlob=`) or a directory already is
+not empty (in case of `DirectoryNotEmpty=`)
+at the time the path unit is activated, then the configured
+unit is immediately activated as well. Something similar does
+not apply to `PathChanged=` and
+`PathModified=`.
+
+If the path itself or any of the containing directories are not accessible,
+**systemd** will watch for permission changes and notice that conditions are satisfied
+when permissions allow that.
+
+Note that files whose name starts with a dot (i.e. hidden files) are generally ignored when
+monitoring these paths.
 
 ### DirectoryNotEmpty=
-If the specified directory exists and contains at least one file, the configured unit is activated.
 
-## Path Configuration
+Defines paths to monitor for certain changes:
+`PathExists=` may be used to watch the mere
+existence of a file or directory. If the file specified
+exists, the configured unit is activated.
+`PathExistsGlob=` works similarly, but checks
+for the existence of at least one file matching the globbing
+pattern specified. `PathChanged=` may be used
+to watch a file or directory and activate the configured unit
+whenever it changes. It is not activated on every write to the
+watched file but it is activated if the file which was open
+for writing gets closed. `PathModified=` is
+similar, but additionally it is activated also on simple
+writes to the watched file.
+`DirectoryNotEmpty=` may be used to watch a
+directory and activate the configured unit whenever it
+contains at least one file.
+
+The arguments of these directives must be absolute file
+system paths.
+
+Multiple directives may be combined, of the same and of
+different types, to watch multiple paths. If the empty string
+is assigned to any of these options, the list of paths to
+watch is reset, and any prior assignments of these options
+will not have any effect.
+
+If a path already exists (in case of
+`PathExists=` and
+`PathExistsGlob=`) or a directory already is
+not empty (in case of `DirectoryNotEmpty=`)
+at the time the path unit is activated, then the configured
+unit is immediately activated as well. Something similar does
+not apply to `PathChanged=` and
+`PathModified=`.
+
+If the path itself or any of the containing directories are not accessible,
+**systemd** will watch for permission changes and notice that conditions are satisfied
+when permissions allow that.
+
+Note that files whose name starts with a dot (i.e. hidden files) are generally ignored when
+monitoring these paths.
 
 ### Unit=
-The unit to activate when the path condition is met. If not specified, defaults to a service unit with the same name as the path unit (except for the suffix).
+
+The unit to activate when any of the
+configured paths changes. The argument is a unit name, whose
+suffix is not " `.path`". If not specified, this
+value defaults to a service that has the same name as the path
+unit, except for the suffix. (See above.) It is recommended
+that the unit name that is activated and the unit name of the
+path unit are named identical, except for the
+suffix.
 
 ### MakeDirectory=
-Takes a boolean argument. If true, the directories to watch are created before watching. This only applies to PathExists= and PathChanged= options.
+
+Takes a boolean argument. If true, the
+directories to watch are created before watching. This option
+is ignored for `PathExists=` settings.
+Defaults to `false`.
 
 ### DirectoryMode=
-If MakeDirectory= is enabled, use this mode when creating the directory. Takes a numeric mode value in octal notation.
 
-## Examples
+If `MakeDirectory=` is
+enabled, use the mode specified here to create the directories
+in question. Takes an access mode in octal notation. Defaults
+to `0755`.
 
-### Watch Configuration File
-```ini
-[Path]
-PathChanged=/etc/myapp/config.conf
-Unit=myapp-reload.service
+### TriggerLimitIntervalSec=
 
-[Install]
-WantedBy=multi-user.target
-```
+Configures a limit on how often this path unit may be activated within a specific
+time interval. The `TriggerLimitIntervalSec=` may be used to configure the length of
+the time interval in the usual time units " `us`", " `ms`",
+" `s`", " `min`", " `h`", … and defaults to 2s. See
+[systemd.time(7)](systemd.time.html#) for
+details on the various time units understood. The `TriggerLimitBurst=` setting takes
+a positive integer value and specifies the number of permitted activations per time interval, and
+defaults to 200. Set either to 0 to disable any form of trigger rate limiting. If the limit is hit,
+the unit is placed into a failure mode, and will not watch the paths anymore until restarted. Note
+that this limit is enforced before the service activation is enqueued.
 
-### Monitor Log Directory
-```ini
-[Path]
-DirectoryNotEmpty=/var/log/myapp
-Unit=log-processor.service
+Added in version 250.
 
-[Install]
-WantedBy=multi-user.target
-```
+### TriggerLimitBurst=
 
-### Watch for New Files
-```ini
-[Path]
-PathExistsGlob=/incoming/*.txt
-Unit=file-processor.service
-MakeDirectory=true
-DirectoryMode=0755
+Configures a limit on how often this path unit may be activated within a specific
+time interval. The `TriggerLimitIntervalSec=` may be used to configure the length of
+the time interval in the usual time units " `us`", " `ms`",
+" `s`", " `min`", " `h`", … and defaults to 2s. See
+[systemd.time(7)](systemd.time.html#) for
+details on the various time units understood. The `TriggerLimitBurst=` setting takes
+a positive integer value and specifies the number of permitted activations per time interval, and
+defaults to 200. Set either to 0 to disable any form of trigger rate limiting. If the limit is hit,
+the unit is placed into a failure mode, and will not watch the paths anymore until restarted. Note
+that this limit is enforced before the service activation is enqueued.
 
-[Install]
-WantedBy=multi-user.target
-```
+Added in version 250.
 
-### USB Device Detection
-```ini
-[Path]
-PathExists=/dev/disk/by-label/BACKUP-USB
-Unit=backup-to-usb.service
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### Configuration Reload
-```ini
-[Path]
-PathModified=/etc/nginx/nginx.conf
-PathModified=/etc/nginx/sites-enabled
-Unit=nginx-reload.service
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### Temporary File Cleanup
-```ini
-[Path]
-DirectoryNotEmpty=/tmp/uploads
-Unit=cleanup-uploads.service
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### Database Backup Trigger
-```ini
-[Path]
-PathExists=/var/lib/mysql/backup-requested
-Unit=mysql-backup.service
-MakeDirectory=false
-
-[Install]
-WantedBy=multi-user.target
-```
-
-## Common Patterns
-
-### Configuration Reloading
-Automatically reload services when configuration changes:
-```ini
-[Path]
-PathChanged=/etc/myservice/
-Unit=myservice-reload.service
-```
-
-### File Processing
-Process files as they appear:
-```ini
-[Path]
-PathExistsGlob=/queue/*.job
-Unit=job-processor.service
-```
-
-### System Monitoring
-Monitor system state changes:
-```ini
-[Path]
-PathExists=/var/run/system-ready
-Unit=post-boot-tasks.service
-```
-
-### Batch Processing
-Trigger batch jobs when work accumulates:
-```ini
-[Path]
-DirectoryNotEmpty=/var/spool/batch
-Unit=batch-processor.service
-```
-
-## Comparison with Alternatives
-
-### vs. inotify
-- Path units use inotify internally but provide systemd integration
-- Automatic service management and logging
-- Better resource management and limits
-- Integration with systemd's dependency system
-
-### vs. cron with find
-- More efficient than periodic polling
-- Immediate response to changes
-- Better error handling and logging
-- Integrated with service lifecycle
-
-### vs. File watchers in applications
-- Centralized monitoring configuration
-- Service can be stopped/started independently of monitoring
-- Consistent logging and error handling
-- No need to implement file watching in each application
-
-## Advanced Configuration
-
-### Multiple Paths
-```ini
-[Path]
-PathChanged=/etc/app1/config
-PathChanged=/etc/app2/config  
-PathModified=/var/log/app/error.log
-Unit=config-sync.service
-```
-
-### Conditional Activation
-```ini
-[Path]
-PathExists=/tmp/maintenance-mode
-Unit=maintenance.service
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### Integration with Timers
-```ini
-# path-monitor.path
-[Path]
-DirectoryNotEmpty=/var/spool/reports
-Unit=report-processor.timer
-
-# report-processor.timer  
-[Timer]
-OnActiveSec=5min
-Unit=report-processor.service
-```
-
-## Service Integration
-
-### Path-Activated Service
-The service activated by the path unit should typically be designed to:
-
-1. Process all relevant files/changes
-2. Complete quickly or run as oneshot
-3. Handle the case where multiple changes occurred
-4. Clean up after processing
-
-Example service:
-```ini
-[Service]
-Type=oneshot
-ExecStart=/usr/local/bin/process-changes
-User=processor
-Group=processor
-```
-
-### Multi-Shot vs One-Shot
-- Use `Type=oneshot` for processing that should complete
-- Use `Type=simple` for long-running monitoring
-- Consider `RemainAfterExit=yes` for oneshot services
-
-## Debugging
-
-### List Path Units
-```bash
-systemctl list-units --type=path
-```
-
-### Show Path Status
-```bash
-systemctl status my-monitor.path
-```
-
-### View Path Logs
-```bash
-journalctl -u my-monitor.path -f
-```
-
-### Test Path Manually
-```bash
-# Trigger the path condition
-touch /watched/file
-
-# Check if service was activated
-systemctl status triggered-service.service
-```
-
-## Limitations
-
-### File System Support
-- Requires inotify support (most modern Linux filesystems)
-- May not work reliably on network filesystems
-- Some filesystems have inotify limitations
-
-### Performance Considerations
-- Each path unit consumes inotify watches
-- System limits on number of watches (/proc/sys/fs/inotify/max_user_watches)
-- Avoid watching very large directories
-
-### Race Conditions
-- Files might be processed multiple times
-- Consider atomic operations (write to temp, then move)
-- Handle partial writes (use locking or temporary files)
-
-## Best Practices
-
-### Path Selection
-- Watch specific files rather than large directories when possible
-- Use PathModified= for content changes, PathChanged= for any changes
-- Consider PathExistsGlob= for pattern matching
-
-### Service Design
-- Make services idempotent (safe to run multiple times)
-- Process all matching files/changes, not just the triggering one
-- Include error handling for missing or changed files
-- Use appropriate file locking for concurrent access
-
-### Resource Management
-- Monitor inotify watch usage
-- Consider batch processing for high-frequency changes
-- Use appropriate cleanup in services
-
-## See Also
-
-- systemd.path(5)
-- inotify(7)
-- systemctl(1)
-- systemd(1)
-- glob(7)

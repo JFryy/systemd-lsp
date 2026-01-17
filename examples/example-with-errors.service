@@ -11,7 +11,7 @@
 # Line 15: ERROR - Invalid NotifyAccess value 'invalid-access'
 # Line 17: ERROR - Unknown section: [UnknownSection]
 # Line 20: WARNING - Unknown directive 'AnotherBadDirective' in [Unit] section
-
+[]
 [Unit]
 Description=Service with validation errors
 After=network.target
@@ -25,6 +25,7 @@ InvalidDirective=some-value
 ProtectSystem=invalid
 StandardOutput=invalid-stream
 NotifyAccess=invalid-access
+IgnoreSIGPIPE="mrr"
 
 [UnknownSection]
 SomeDirective=value

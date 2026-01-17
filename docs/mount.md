@@ -1,295 +1,174 @@
 # [Mount] Section
 
-The `[Mount]` section encodes information about a file system mount point controlled and supervised by systemd. Mount units must be named after the mount point directories they control. For example, the mount point `/home/lennart` must be configured in the unit file `home-lennart.mount`.
+A unit configuration file whose name ends in
+" `.mount`" encodes information about a file system
+mount point controlled and supervised by systemd.
+
+This man page lists the configuration options specific to
+this unit type. See
+[systemd.unit(5)](systemd.unit.html#)
+for the common options of all unit configuration files. The common
+configuration items are configured in the generic \[Unit\] and
+\[Install\] sections. The mount specific configuration options are
+configured in the \[Mount\] section.
+
+Additional options are listed in
+[systemd.exec(5)](systemd.exec.html#),
+which define the execution environment the
+[mount(8)](https://man7.org/linux/man-pages/man8/mount.8.html)
+program is executed in, and in
+[systemd.kill(5)](systemd.kill.html#),
+which define the way the processes are terminated, and in
+[systemd.resource-control(5)](systemd.resource-control.html#),
+which configure resource control settings for the processes of the
+service.
+
+Note that the options `User=` and
+`Group=` are not useful for mount units.
+systemd passes two parameters to
+[mount(8)](https://man7.org/linux/man-pages/man8/mount.8.html);
+the values of `What=` and `Where=`.
+When invoked in this way,
+[mount(8)](https://man7.org/linux/man-pages/man8/mount.8.html)
+does not read any options from `/etc/fstab`, and
+must be run as UID 0.
+
+Mount units must be named after the mount point directories they control. Example: the mount point
+`/home/lennart` must be configured in a unit file
+`home-lennart.mount`. For details about the escaping logic used to convert a file
+system path to a unit name, see
+[systemd.unit(5)](systemd.unit.html#). Note
+that mount units cannot be templated, nor is possible to add multiple names to a mount unit by creating
+symlinks to its unit file.
+
+Optionally, a mount unit may be accompanied by an automount
+unit, to allow on-demand or parallelized mounting. See
+[systemd.automount(5)](systemd.automount.html#).
+
+Mount points created at runtime (independently of unit files
+or `/etc/fstab`) will be monitored by systemd
+and appear like any other mount unit in systemd. See
+`/proc/self/mountinfo` description in
+[proc(5)](https://man7.org/linux/man-pages/man5/proc.5.html).
+
+
+Some file systems have special semantics as API file systems
+for kernel-to-userspace and userspace-to-userspace interfaces. Some
+of them may not be changed via mount units, and cannot be
+disabled. For a longer discussion see [API\
+File Systems](https://systemd.io/API_FILE_SYSTEMS).
+
+The
+[systemd-mount(1)](systemd-mount.html#) command
+allows creating `.mount` and `.automount` units dynamically and
+transiently from the command line.
 
 *Based on [systemd.mount(5)](https://www.freedesktop.org/software/systemd/man/systemd.mount.html) official documentation.*
 
-## Required Directives
-
 ### What=
-Takes an absolute path of a device node, file or other resource to mount. This corresponds to the device/source field of the mount(8) command or the first field of /etc/fstab.
+
+Takes an absolute path or a fstab-style identifier of a device node, file or
+other resource to mount. See [mount(8)](https://man7.org/linux/man-pages/man8/mount.8.html) for
+details. If this refers to a device node, a dependency on the respective device unit is automatically
+created. (See
+[systemd.device(5)](systemd.device.html#)
+for more information.) This option is mandatory. Note that the usual specifier expansion is applied
+to this setting, literal percent characters should hence be written as " `%%`". If this mount is a bind mount and the specified path does not exist
+yet it is created as directory.
 
 ### Where=
-Takes an absolute path of the mount point. This must match the unit name. This corresponds to the mount point field of the mount(8) command or the second field of /etc/fstab.
 
-## Optional Directives
+Takes an absolute path of a file or directory for the mount point; in particular, the
+destination cannot be a symbolic link. If the mount point does not exist at the time of mounting, it
+is created as either a directory or a file. The former is the usual case; the latter is done only if this mount
+is a bind mount and the source ( `What=`) is not a directory.
+This string must be reflected in the unit filename. (See above.) This option
+is mandatory.
 
 ### Type=
-Takes a file system type as used by mount(8). This corresponds to the file system type field of /etc/fstab or the -t parameter of mount(8).
+
+Takes a string for the file system type. See
+[mount(8)](https://man7.org/linux/man-pages/man8/mount.8.html)
+for details. This setting is optional.
+
+If the type is " `overlay`", and " `upperdir=`" or
+" `workdir=`" are specified as options and the directories do not exist, they will be created.
 
 ### Options=
-Mount options to use when mounting. This corresponds to the options field in /etc/fstab or the -o parameter of mount(8).
+
+Mount options to use when mounting. This takes a comma-separated list of options. This setting
+is optional. Note that the usual specifier expansion is applied to this setting, literal percent characters
+should hence be written as " `%%`".
 
 ### SloppyOptions=
-Takes a boolean argument. If true, parsing of the mount options is relaxed, and unknown mount options are tolerated.
+
+Takes a boolean argument. If true, parsing of
+the options specified in `Options=` is
+relaxed, and unknown mount options are tolerated. This
+corresponds with
+[mount(8)](https://man7.org/linux/man-pages/man8/mount.8.html)'s
+_`-s`_ switch. Defaults to
+off.
+
+Added in version 215.
 
 ### LazyUnmount=
-Takes a boolean argument. If true, detach the filesystem from the mount tree before attempting to unmount it (MNT_DETACH).
+
+Takes a boolean argument. If true, detach the
+filesystem from the filesystem hierarchy at time of the unmount
+operation, and clean up all references to the filesystem as
+soon as they are not busy anymore.
+This corresponds with
+[umount(8)](https://man7.org/linux/man-pages/man8/umount.8.html)'s
+_`-l`_ switch. Defaults to
+off.
+
+Added in version 232.
 
 ### ReadWriteOnly=
-Takes a boolean argument. If true, remount the mount point read-write after mounting.
+
+Takes a boolean argument. If false, a mount
+point that shall be mounted read-write but cannot be mounted
+so is retried to be mounted read-only. If true the operation
+will fail immediately after the read-write mount attempt did
+not succeed. This corresponds with
+[mount(8)](https://man7.org/linux/man-pages/man8/mount.8.html)'s
+_`-w`_ switch. Defaults to
+off.
+
+Added in version 246.
 
 ### ForceUnmount=
-Takes a boolean argument. If true, force an unmount (MNT_FORCE).
+
+Takes a boolean argument. If true, force an
+unmount (in case of an unreachable NFS system).
+This corresponds with
+[umount(8)](https://man7.org/linux/man-pages/man8/umount.8.html)'s
+_`-f`_ switch. Defaults to
+off.
+
+Added in version 232.
 
 ### DirectoryMode=
-Directories of mount points (and any parent directories) are automatically created if needed. This option specifies the access mode of these directories.
+
+Directories of mount points (and any parent
+directories) are automatically created if needed. This option
+specifies the file system access mode used when creating these
+directories. Takes an access mode in octal notation. Defaults
+to 0755.
 
 ### TimeoutSec=
-Configures the time to wait for the mount/unmount command to finish.
 
-## File System Types
+Configures the time to wait for the mount
+command to finish. If a command does not exit within the
+configured time, the mount will be considered failed and be
+shut down again. All commands still running will be terminated
+forcibly via `SIGTERM`, and after another
+delay of this time with `SIGKILL`. (See
+`KillMode=` in
+[systemd.kill(5)](systemd.kill.html#).)
+Takes a unit-less value in seconds, or a time span value such
+as "5min 20s". Pass 0 to disable the timeout logic. The
+default value is set from `DefaultTimeoutStartSec=` option in
+[systemd-system.conf(5)](systemd-system.conf.html#).
 
-### Common File Systems
-- `ext4` - Fourth extended filesystem
-- `ext3` - Third extended filesystem  
-- `ext2` - Second extended filesystem
-- `xfs` - XFS filesystem
-- `btrfs` - B-tree filesystem
-- `vfat` - VFAT filesystem (FAT32)
-- `ntfs` - NTFS filesystem
-- `exfat` - exFAT filesystem
-- `iso9660` - ISO 9660 filesystem (CD-ROM)
-- `tmpfs` - Temporary filesystem in RAM
-- `proc` - Process information pseudo-filesystem
-- `sysfs` - System information pseudo-filesystem
-- `devpts` - Device pseudo-terminal filesystem
-
-### Network File Systems
-- `nfs` - Network File System
-- `nfs4` - Network File System version 4
-- `cifs` - Common Internet File System (SMB/CIFS)
-- `sshfs` - SSH Filesystem
-
-### Special File Systems
-- `bind` - Bind mount (not a real filesystem)
-- `overlay` - Overlay filesystem
-- `squashfs` - Compressed read-only filesystem
-- `fuse` - Filesystem in Userspace
-
-## Common Mount Options
-
-### General Options
-- `defaults` - Use default options (rw,suid,dev,exec,auto,nouser,async)
-- `rw` - Mount read-write (default)
-- `ro` - Mount read-only
-- `noatime` - Do not update access times
-- `relatime` - Update access times relative to modify/change time
-- `sync` - Synchronous I/O
-- `async` - Asynchronous I/O (default)
-- `auto` - Can be mounted with -a option
-- `noauto` - Cannot be mounted with -a option
-- `user` - Allow ordinary users to mount
-- `nouser` - Only root can mount (default)
-- `owner` - Allow device owner to mount
-- `users` - Allow any user to mount and unmount
-- `group` - Allow members of device group to mount
-
-### Security Options
-- `suid` - Allow set-user-identifier (default)
-- `nosuid` - Ignore set-user-identifier bits
-- `dev` - Interpret character/block special devices (default)
-- `nodev` - Don't interpret character/block special devices
-- `exec` - Allow execution of binaries (default)
-- `noexec` - Don't allow execution of binaries
-
-### Performance Options
-- `cache=strict` - Cache mode for network filesystems
-- `vers=3` - NFS version
-- `proto=tcp` - Protocol to use
-- `rsize=32768` - Read buffer size
-- `wsize=32768` - Write buffer size
-- `timeo=14` - Timeout value
-- `retrans=3` - Number of retransmissions
-
-## Examples
-
-### Basic Mount
-```ini
-[Mount]
-What=/dev/sdb1
-Where=/mnt/data
-Type=ext4
-Options=defaults
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### Temporary Filesystem
-```ini
-[Mount]
-What=tmpfs
-Where=/tmp/scratch
-Type=tmpfs
-Options=size=1G,uid=1000,gid=1000,mode=0755
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### Network Mount (NFS)
-```ini
-[Mount]
-What=server.example.com:/export/home
-Where=/mnt/nfs-home
-Type=nfs4
-Options=vers=4,proto=tcp,rsize=32768,wsize=32768
-
-[Install]
-WantedBy=remote-fs.target
-```
-
-### Bind Mount
-```ini
-[Mount]
-What=/var/lib/docker
-Where=/docker-data
-Type=none
-Options=bind,rw
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### Read-Only Mount
-```ini
-[Mount]
-What=/dev/cdrom
-Where=/mnt/cdrom
-Type=iso9660
-Options=ro,noauto
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### CIFS/SMB Mount
-```ini
-[Mount]
-What=//server.example.com/share
-Where=/mnt/samba
-Type=cifs
-Options=credentials=/etc/samba/credentials,uid=1000,gid=1000,iocharset=utf8
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### Encrypted Mount
-```ini
-[Mount]
-What=/dev/mapper/encrypted-data
-Where=/mnt/encrypted
-Type=ext4
-Options=defaults,noatime
-
-[Install]
-WantedBy=multi-user.target
-RequiredBy=data-service.service
-```
-
-## Common Patterns
-
-### Data Directory
-For application data directories:
-```ini
-[Mount]
-What=/dev/disk/by-label/app-data
-Where=/var/lib/myapp
-Type=ext4
-Options=defaults,noatime
-DirectoryMode=0755
-```
-
-### Backup Mount
-For backup storage:
-```ini
-[Mount]
-What=backup-server:/backups
-Where=/mnt/backups
-Type=nfs4
-Options=ro,vers=4,proto=tcp
-```
-
-### Container Storage
-For container runtime storage:
-```ini
-[Mount]
-What=/dev/disk/by-label/containers
-Where=/var/lib/containers
-Type=xfs
-Options=defaults,prjquota
-```
-
-## Dependencies
-
-### Unit Dependencies
-Mount units automatically gain dependencies:
-- `Requires=` and `After=` on units for parent mount points
-- `Before=` umount.target
-- `Conflicts=` and `Before=` umount.target
-
-### Automatic Dependencies
-systemd automatically creates dependencies for:
-- Parent directory mount points
-- Device units for block devices
-- Network targets for network mounts
-
-## Management Commands
-
-### List Mount Units
-```bash
-systemctl list-units --type=mount
-```
-
-### Show Mount Status
-```bash
-systemctl status mnt-data.mount
-```
-
-### Mount/Unmount
-```bash
-systemctl start mnt-data.mount
-systemctl stop mnt-data.mount
-```
-
-### Enable at Boot
-```bash
-systemctl enable mnt-data.mount
-```
-
-### Show Mount Points
-```bash
-findmnt
-mount | grep systemd
-```
-
-## Troubleshooting
-
-### Common Issues
-- Unit name must match mount point (/ becomes -, escape special chars)
-- Device must exist before mounting
-- Mount point directory is created automatically
-- Network mounts require network to be available
-
-### Debugging
-```bash
-# Check mount unit status
-systemctl status unit.mount
-
-# View mount logs
-journalctl -u unit.mount
-
-# Test mount manually
-mount -t type what where
-```
-
-## See Also
-
-- [systemd.mount(5)](https://www.freedesktop.org/software/systemd/man/systemd.mount.html) - Mount unit configuration
-- [mount(8)](https://man7.org/linux/man-pages/man8/mount.8.html) - Mount filesystems
-- [fstab(5)](https://man7.org/linux/man-pages/man5/fstab.5.html) - Static information about filesystems
-- [systemctl(1)](https://www.freedesktop.org/software/systemd/man/systemctl.html) - Control systemd services and units
-- [systemd(1)](https://www.freedesktop.org/software/systemd/man/systemd.html) - systemd system and service manager
-- [findmnt(8)](https://man7.org/linux/man-pages/man8/findmnt.8.html) - Find mounted filesystems

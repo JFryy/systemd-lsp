@@ -164,7 +164,7 @@ mod tests {
         // Test that all expected documentation is present and not empty
         let expected_sections = vec![
             "Unit", "Service", "Install", "Socket", "Timer",
-            "Mount", "Path", "Swap", "Automount", "Device",
+            "Mount", "Path", "Swap", "Automount",
             "Slice", "Scope"
         ];
 

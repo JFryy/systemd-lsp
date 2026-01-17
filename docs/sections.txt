@@ -6,8 +6,6 @@ Path
 Mount
 Automount
 Swap
-Target
-Device
 Slice
 Scope
 Install

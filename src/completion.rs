@@ -300,64 +300,72 @@ impl SystemdCompletion {
      * Most notably, directive headers must be prefixed with "### " and suffixed with "=".
      */
     fn extract_directive_from_markdown(section_name: &str, directive_name: &str) -> Option<String> {
-        // Load the comprehensive markdown file for this section
-        let markdown_content = match section_name.to_lowercase().as_str() {
-            "unit" => Some(include_str!("../docs/unit.md")),
-            "service" => Some(include_str!("../docs/service.md")),
-            "socket" => Some(include_str!("../docs/socket.md")),
-            "timer" => Some(include_str!("../docs/timer.md")),
-            "install" => Some(include_str!("../docs/install.md")),
-            "mount" => Some(include_str!("../docs/mount.md")),
-            "path" => Some(include_str!("../docs/path.md")),
-            "swap" => Some(include_str!("../docs/swap.md")),
-            "container" => Some(include_str!("../docs/container.md")),
-            "pod" => Some(include_str!("../docs/pod.md")),
-            "volume" => Some(include_str!("../docs/volume.md")),
-            "network" => Some(include_str!("../docs/network.md")),
-            "kube" => Some(include_str!("../docs/kube.md")),
-            "build" => Some(include_str!("../docs/build.md")),
-            "image" => Some(include_str!("../docs/image.md")),
-            _ => None,
-        }?;
+        // Helper function to search for a directive in a markdown string
+        fn search_in_markdown(markdown_content: &str, directive_name: &str) -> Option<String> {
+            let directive_header = format!("### {}=", directive_name);
+            let directive_header_lower = directive_header.to_lowercase();
 
-        // Search for the directive header (### DirectiveName=)
-        let directive_header = format!("### {}=", directive_name);
-        let directive_header_lower = directive_header.to_lowercase();
+            let lines = markdown_content.lines();
+            let mut found_header = false;
+            let mut doc_lines = Vec::new();
 
-        let lines = markdown_content.lines();
-        let mut found_header = false;
-        let mut doc_lines = Vec::new();
-
-        for line in lines {
-            if line.to_lowercase() == directive_header_lower {
-                found_header = true;
-                continue;
-            }
-
-            if found_header {
-                // Stop at the next directive header (###) or section header (##)
-                if line.starts_with("### ") || line.starts_with("## ") {
-                    break;
+            for line in lines {
+                if line.to_lowercase() == directive_header_lower {
+                    found_header = true;
+                    continue;
                 }
-                doc_lines.push(line);
+
+                if found_header {
+                    // Stop at the next directive header (###) or section header (##)
+                    if line.starts_with("### ") || line.starts_with("## ") {
+                        break;
+                    }
+                    doc_lines.push(line);
+                }
+            }
+
+            if doc_lines.is_empty() {
+                return None;
+            }
+
+            // Join the lines and trim
+            let documentation = doc_lines.join("\n").trim().to_string();
+
+            // Remove the trailing "**Reference:**" line if present
+            let documentation = if let Some(last_ref_pos) = documentation.rfind("**Reference:**") {
+                documentation[..last_ref_pos].trim().to_string()
+            } else {
+                documentation
+            };
+
+            Some(documentation)
+        }
+
+        // First, try to find the directive in the section's own markdown file
+        let section_docs = SystemdConstants::section_documentation();
+        if let Some(section_key) = section_docs.keys().find(|k| k.eq_ignore_ascii_case(section_name)) {
+            if let Some(markdown_content) = section_docs.get(section_key) {
+                if let Some(result) = search_in_markdown(markdown_content, directive_name) {
+                    return Some(result);
+                }
             }
         }
 
-        if doc_lines.is_empty() {
-            return None;
+        // If not found in the section's own docs, search in shared documentation
+        // (exec, kill, resource-control) based on which section we're in
+        let shared_docs_keys = SystemdConstants::section_shared_docs(section_name);
+        if !shared_docs_keys.is_empty() {
+            let shared_docs = SystemdConstants::shared_documentation();
+            for shared_key in shared_docs_keys {
+                if let Some(shared_content) = shared_docs.get(shared_key) {
+                    if let Some(result) = search_in_markdown(shared_content, directive_name) {
+                        return Some(result);
+                    }
+                }
+            }
         }
 
-        // Join the lines and trim
-        let documentation = doc_lines.join("\n").trim().to_string();
-
-        // Remove the trailing "**Reference:**" line if present
-        let documentation = if let Some(last_ref_pos) = documentation.rfind("**Reference:**") {
-            documentation[..last_ref_pos].trim().to_string()
-        } else {
-            documentation
-        };
-
-        Some(documentation)
+        None
     }
 
     // We also leverage the directive completion for auto complete and hover.

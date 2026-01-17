@@ -1,298 +1,136 @@
 # [Image] Section
 
-The `[Image]` section describes a container image pull operation that will be executed using `podman image pull` and managed by systemd through Podman Quadlet. This allows you to declaratively ensure container images are pulled and available before dependent containers start. Image units use the `.image` file extension and are automatically converted into systemd service units.
+Image files are named with a `.image` extension and contain a section `[Image]` describing the
+container image pull command. The generated service is a one-time command that ensures that the image
+exists on the host, pulling it if needed.
+
+Using image units allows containers and volumes to depend on images being automatically pulled. This is
+particularly interesting when using special options to control image pulls.
+
+Valid options for `[Image]` are listed below:
 
 *Based on [podman-systemd.unit(5)](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html) official documentation.*
 
-## Required Configuration
-
-### Image=
-The container image identifier to retrieve.
-
-**Format:** Registry/repository/image with optional tag or digest
-
-**Recommendation:** Use fully-qualified names (include registry) for performance and robustness
-
-**Required:** Yes
-
-**Example:**
-- `Image=docker.io/nginx:latest`
-- `Image=quay.io/centos/centos:stream9`
-- `Image=registry.example.com/myapp@sha256:abcd1234...`
-
-### ImageTag=
-Specifies an alternate reference name for the pulled image when other Quadlet units reference it via `.image` notation.
-
-**Format:** Image name/tag
-
-**Default:** Uses the `Image=` value
-
-**Purpose:** Allows renaming/tagging the pulled image for use by other units
-
-**Example:** `ImageTag=myapp:latest`
-
-## Pull Policy
-
-### Policy=
-Controls when image pulls occur.
-
-**Values:**
-- `always` - Always pull from registry (ignore local cache)
-- `missing` - Pull only if not present locally
-- `never` - Never pull, use local only (fail if missing)
-- `newer` - Pull if registry has newer version
-
-**Example:** `Policy=always`
-
 ### AllTags=
-Retrieves all tagged variants of a container image from the repository.
 
-**Format:** `true` or `false`
+All tagged images in the repository are pulled.
 
-**Default:** `false`
-
-**Example:** `AllTags=true`
-
-### Retry=
-Sets how many times the pull operation automatically retries upon encountering HTTP connection errors.
-
-**Format:** Numeric count
-
-**Example:** `Retry=5`
-
-### RetryDelay=
-Establishes the waiting period between consecutive retry attempts for failed pulls.
-
-**Format:** Time duration with units
-
-**Example:** `RetryDelay=10s`
-
-## Architecture and Platform
+This is equivalent to the Podman `--all-tags` option.
 
 ### Arch=
-Specifies a non-default processor architecture for the pulled image.
 
-**Format:** Architecture identifier
+Override the architecture, defaults to hosts, of the image to be pulled.
 
-**Default:** System's native architecture
-
-**Example:**
-- `Arch=aarch64`
-- `Arch=amd64`
-- `Arch=arm`
-
-### OS=
-Specifies the target operating system for the image.
-
-**Format:** OS identifier
-
-**Default:** Host's operating system
-
-**Example:**
-- `OS=linux`
-- `OS=windows`
-
-### Variant=
-Overrides the default processor architecture variant.
-
-**Format:** Architecture variant specification
-
-**Example:** `Variant=arm/v7`
-
-## Authentication
+This is equivalent to the Podman `--arch` option.
 
 ### AuthFile=
-Indicates the location of authentication credentials for accessing private container registries.
 
-**Format:** Absolute file path
+Path of the authentication file.
 
-**Example:** `AuthFile=/etc/registry/auth.json`
-
-### Creds=
-Supplies username and password credentials for authenticating with container registries.
-
-**Format:** `username:password`
-
-**Warning:** Credentials stored in plain text; prefer `AuthFile=` for security
-
-**Example:** `Creds=myuser:mypassword`
-
-## TLS and Certificates
-
-### TLSVerify=
-Determines whether SSL/TLS certificate validation is enforced when connecting to registries.
-
-**Format:** `true` or `false`
-
-**Default:** `true` (verification enabled)
-
-**Example:** `TLSVerify=false`
+This is equivalent to the Podman `--authfile` option.
 
 ### CertDir=
-Specifies where certificate files for registry verification are stored on the system.
 
-**Format:** Directory path
+Use certificates at path (\*.crt, \*.cert, \*.key) to connect to the registry.
 
-**Example:** `CertDir=/etc/registry/certs`
-
-## Encryption
-
-### DecryptionKey=
-Provides the path to a key file necessary for decrypting encrypted container images.
-
-**Format:** File path
-
-**Example:** `DecryptionKey=/etc/registry/decryption.key`
-
-## Advanced Options
+This is equivalent to the Podman `--cert-dir` option.
 
 ### ContainersConfModule=
-Loads a specific containers.conf configuration module to modify pull behavior.
 
-**Format:** File path
+Load the specified containers.conf(5) module. Equivalent to the Podman `--module` option.
 
-**Multiple:** Yes
+This key can be listed multiple times.
 
-**Example:** `ContainersConfModule=/etc/containers/nvidia.conf`
+### Creds=
+
+The `[username[:password]]` to use to authenticate with the registry, if required.
+
+This is equivalent to the Podman `--creds` option.
+
+### DecryptionKey=
+
+The `[key[:passphrase]]` to be used for decryption of images.
+
+This is equivalent to the Podman `--decryption-key` option.
 
 ### GlobalArgs=
-Passes low-level arguments directly to the Podman binary between "podman" and "image."
 
-**Format:** Space-separated arguments with optional escaping
+This key contains a list of arguments passed directly between `podman` and `image`
+in the generated file. It can be used to access Podman features otherwise unsupported by the generator. Since the generator is unaware
+of what unexpected interactions can be caused by these arguments, it is not recommended to use
+this option.
 
-**Multiple:** Yes
+The format of this is a space separated list of arguments, which can optionally be individually
+escaped to allow inclusion of whitespace and other control characters.
 
-**Warning:** Not recommended for general use
+This key can be listed multiple times.
 
-**Example:** `GlobalArgs=--log-level=debug`
+### Image=
+
+The image to pull.
+It is recommended to use a fully qualified image name rather than a short name, both for
+performance and robustness reasons.
+
+The format of the name is the same as when passed to `podman pull`. So, it supports using
+`:tag` or digests to guarantee the specific image version.
+
+### ImageTag=
+
+Actual FQIN of the referenced `Image`.
+Only meaningful when source is a file or directory archive.
+
+For example, an image saved into a `docker-archive` with the following Podman command:
+
+`podman image save --format docker-archive --output /tmp/archive-file.tar quay.io/podman/stable:latest`
+
+requires setting
+
+- `Image=docker-archive:/tmp/archive-file.tar`
+
+- `ImageTag=quay.io/podman/stable:latest`
+
+### OS=
+
+Override the OS, defaults to hosts, of the image to be pulled.
+
+This is equivalent to the Podman `--os` option.
 
 ### PodmanArgs=
-Transmits arguments directly to the end of the pull command before the image name.
 
-**Format:** Space-separated arguments with optional escaping
+This key contains a list of arguments passed directly to the end of the `podman image pull` command
+in the generated file (right before the image name in the command line). It can be used to
+access Podman features otherwise unsupported by the generator. Since the generator is unaware
+of what unexpected interactions can be caused by these arguments, it is not recommended to use
+this option.
 
-**Multiple:** Yes
+The format of this is a space separated list of arguments, which can optionally be individually
+escaped to allow inclusion of whitespace and other control characters.
 
-**Warning:** Not recommended for general use
+This key can be listed multiple times.
 
-**Example:** `PodmanArgs=--platform=linux/amd64`
+### Policy=
 
-## Example: Basic Image Pull
+The pull policy to use when pulling the image.
 
-```ini
-[Unit]
-Description=Pull nginx image
+This is equivalent to the Podman `--policy` option.
 
-[Image]
-Image=docker.io/nginx:latest
-Policy=missing
+### Retry=
 
-[Install]
-WantedBy=multi-user.target
-```
+Number of times to retry the image pull when a HTTP error occurs. Equivalent to the Podman `--retry` option.
 
-## Example: Private Registry with Authentication
+### RetryDelay=
 
-```ini
-[Unit]
-Description=Pull private application image
+Delay between retries. Equivalent to the Podman `--retry-delay` option.
 
-[Image]
-Image=registry.example.com/myapp:v1.0
-AuthFile=/etc/registry/auth.json
-TLSVerify=true
-Policy=always
-Retry=3
-RetryDelay=5s
+### TLSVerify=
 
-[Install]
-WantedBy=multi-user.target
-```
+Require HTTPS and verification of certificates when contacting registries.
 
-## Example: Cross-Architecture Pull
+This is equivalent to the Podman `--tls-verify` option.
 
-```ini
-[Unit]
-Description=Pull ARM image on x86 host
+### Variant=
 
-[Image]
-Image=docker.io/myapp:latest
-Arch=aarch64
-OS=linux
-Variant=arm/v8
-ImageTag=myapp:arm64
+Override the default architecture variant of the container image.
 
-[Install]
-WantedBy=multi-user.target
-```
+This is equivalent to the Podman `--variant` option.
 
-## Example: Pull All Tags
-
-```ini
-[Unit]
-Description=Pull all nginx tags
-
-[Image]
-Image=docker.io/nginx
-AllTags=true
-Policy=always
-
-[Install]
-WantedBy=multi-user.target
-```
-
-## Example: Encrypted Image
-
-```ini
-[Unit]
-Description=Pull encrypted image
-
-[Image]
-Image=registry.example.com/secure/myapp:latest
-AuthFile=/etc/registry/auth.json
-DecryptionKey=/etc/registry/decryption.key
-TLSVerify=true
-
-[Install]
-WantedBy=multi-user.target
-```
-
-## Using Pulled Images
-
-Reference image units from container or build units using `.image` suffix:
-
-```ini
-# myapp.container
-[Container]
-Image=nginx.image
-PublishPort=8080:80
-```
-
-Or reference in volume units:
-
-```ini
-# data.volume
-[Volume]
-Driver=image
-Image=nginx.image
-```
-
-The LSP will automatically create service dependencies to ensure the image is pulled before dependent units start.
-
-## Comparison: Image vs Build Units
-
-| Feature | `.image` Unit | `.build` Unit |
-|---------|--------------|---------------|
-| Purpose | Pull existing image | Build image from Containerfile |
-| Source | Container registry | Local Containerfile |
-| Use Case | Production deployments | Custom/local images |
-| Speed | Faster (just download) | Slower (compilation) |
-| Dependencies | Network access | Build tools, context |
-
-## See Also
-
-- [podman-systemd.unit(5)](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html)
-- [podman-image(1)](https://docs.podman.io/en/latest/markdown/podman-image.1.html)
-- [podman-pull(1)](https://docs.podman.io/en/latest/markdown/podman-pull.1.html)
-- systemd.unit(5)
-- systemd.service(5)

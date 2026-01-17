@@ -1,14 +1,14 @@
 ContainersConfModule
-DisableDNS
 DNS
+DisableDNS
 Driver
 Gateway
 GlobalArgs
-InterfaceName
-Internal
 IPAMDriver
 IPRange
 IPv6
+InterfaceName
+Internal
 Label
 NetworkDeleteOnStop
 NetworkName

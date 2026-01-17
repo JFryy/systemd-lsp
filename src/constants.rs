@@ -72,13 +72,6 @@ impl SystemdConstants {
                 .collect(),
         );
         map.insert(
-            "Device",
-            include_str!("../docs/directives/device.txt")
-                .lines()
-                .filter(|line| !line.starts_with('#') && !line.trim().is_empty())
-                .collect(),
-        );
-        map.insert(
             "Slice",
             include_str!("../docs/directives/slice.txt")
                 .lines()
@@ -309,13 +302,35 @@ impl SystemdConstants {
         map.insert("Build", include_str!("../docs/build.md"));
         map.insert("Image", include_str!("../docs/image.md"));
 
-        // Additional sections from docs/sections/
-        map.insert("Automount", include_str!("../docs/sections/automount.md"));
-        map.insert("Device", include_str!("../docs/sections/device.md"));
-        map.insert("Slice", include_str!("../docs/sections/slice.md"));
-        map.insert("Scope", include_str!("../docs/sections/scope.md"));
+        map.insert("Automount", include_str!("../docs/automount.md"));
+        map.insert("Slice", include_str!("../docs/slice.md"));
+        map.insert("Scope", include_str!("../docs/scope.md"));
 
         map
+    }
+
+    /// Get shared documentation files (exec, kill, resource-control)
+    /// These contain directives that are shared across multiple section types
+    pub fn shared_documentation() -> HashMap<&'static str, &'static str> {
+        let mut map = HashMap::new();
+        map.insert("exec", include_str!("../docs/exec.md"));
+        map.insert("kill", include_str!("../docs/kill.md"));
+        map.insert("resource-control", include_str!("../docs/resource-control.md"));
+        map
+    }
+
+    /// Returns the list of shared documentation keys that apply to a given section
+    /// This mapping determines which additional directive sets are available in each section
+    pub fn section_shared_docs(section: &str) -> Vec<&'static str> {
+        match section.to_lowercase().as_str() {
+            "service" => vec!["exec", "kill", "resource-control"],
+            "socket" => vec!["exec", "kill", "resource-control"],
+            "mount" => vec!["exec", "kill", "resource-control"],
+            "swap" => vec!["exec", "kill", "resource-control"],
+            "scope" => vec!["kill", "resource-control"],
+            "slice" => vec!["resource-control"],
+            _ => vec![],
+        }
     }
 
     pub const APP_NAME: &'static str = "systemdls";
@@ -350,7 +365,6 @@ mod tests {
         assert!(directives.contains_key("Path"));
         assert!(directives.contains_key("Swap"));
         assert!(directives.contains_key("Automount"));
-        assert!(directives.contains_key("Device"));
         assert!(directives.contains_key("Slice"));
         assert!(directives.contains_key("Scope"));
     }
@@ -473,7 +487,6 @@ mod tests {
         assert!(docs.contains_key("Service"));
         assert!(docs.contains_key("Install"));
         assert!(docs.contains_key("Automount"));
-        assert!(docs.contains_key("Device"));
         assert!(docs.contains_key("Slice"));
         assert!(docs.contains_key("Scope"));
 
@@ -482,7 +495,6 @@ mod tests {
         assert!(!docs["Service"].is_empty());
         assert!(!docs["Install"].is_empty());
         assert!(!docs["Automount"].is_empty());
-        assert!(!docs["Device"].is_empty());
         assert!(!docs["Slice"].is_empty());
         assert!(!docs["Scope"].is_empty());
     }
