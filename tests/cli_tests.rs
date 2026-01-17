@@ -18,7 +18,14 @@ fn ensure_binary_built() {
 fn run_systemd_lsp(args: &[&str]) -> (String, String, i32) {
     ensure_binary_built();
 
-    let output = Command::new("./target/release/systemd-lsp")
+    // Use platform-specific binary name
+    let binary_path = if cfg!(windows) {
+        "./target/release/systemd-lsp.exe"
+    } else {
+        "./target/release/systemd-lsp"
+    };
+
+    let output = Command::new(binary_path)
         .args(args)
         .output()
         .expect("Failed to execute systemd-lsp");
