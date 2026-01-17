@@ -1,6 +1,6 @@
 [package]
 name = "systemd-lsp"
-version = "0.1.4"
+version = "0.2.0"
 edition = "2021"
 authors = ["James Fotherby <fotherby1@gmail.com>"]
 description = "Language Server Protocol implementation for systemd unit files"
