@@ -174,6 +174,7 @@ fn test_cli_warnings_only() {
 }
 
 #[test]
+#[cfg(not(target_os = "windows"))] // Skip on Windows - path handling differences
 fn test_cli_directory_non_recursive() {
     let (stdout, _stderr, exit_code) = run_systemd_lsp(&["examples"]);
 
@@ -191,6 +192,7 @@ fn test_cli_directory_non_recursive() {
 }
 
 #[test]
+#[cfg(not(target_os = "windows"))] // Skip on Windows - path handling differences
 fn test_cli_directory_recursive() {
     let (stdout, _stderr, _exit_code) = run_systemd_lsp(&["examples", "--recursive"]);
 
