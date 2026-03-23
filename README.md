@@ -96,6 +96,11 @@ call LspAddServer([#{name: 'systemd_ls',
 
 Replace `/path/to/systemd-lsp` with the actual path to your built binary.
 
+### Helix
+
+Works out of the box, just make sure the `systemd-lsp` binary is in your `PATH` variable.
+Verify that Helix detects `systemd-lsp` with `hx --health systemd`.
+
 ### Manual execution
 
 You can run the language server directly, although there is little reason to do so except for debugging purposes. An editor typically starts and stops the server implicitly.
