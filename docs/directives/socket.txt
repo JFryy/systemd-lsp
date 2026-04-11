@@ -12,6 +12,7 @@ BPFProgram
 Backlog
 BindIPv6Only
 BindLogSockets
+BindNetworkInterface
 BindPaths
 BindReadOnlyPaths
 BindToDevice
@@ -32,7 +33,6 @@ ConfigurationDirectory
 ConfigurationDirectoryMode
 CoredumpFilter
 CoredumpReceive
-DefaultStartupMemoryLow
 DeferAcceptSec
 DeferTrigger
 DeferTriggerMaxSec
@@ -143,6 +143,7 @@ MemoryMin
 MemoryPressureThresholdSec
 MemoryPressureWatch
 MemorySwapMax
+MemoryTHP
 MemoryZSwapMax
 MemoryZSwapWriteback
 MessageQueueMaxMessages
@@ -210,6 +211,7 @@ RootHashSignature
 RootImage
 RootImageOptions
 RootImagePolicy
+RootMStack
 RootVerity
 RuntimeDirectory
 RuntimeDirectoryMode

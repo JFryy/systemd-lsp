@@ -436,7 +436,8 @@ Exposes a port, or a range of ports (e.g. `50-59`), from the container to the ho
 to the Podman `--publish` option. The format is similar to the Podman options, which is of
 the form `ip:hostPort:containerPort`, `ip::containerPort`, `hostPort:containerPort` or
 `containerPort`, where the number of host and container ports must be the same (in the case
-of a range).
+of a range). The protocol can be provided at the end, e.g., `hostPort:containerPort/tcp`.
+Valid protocols are `tcp` and `udp`; the `sctp` protocol is supported only for rootful containers.
 
 If the IP is set to 0.0.0.0 or not set at all, the port is bound on all IPv4 addresses on
 the host; use \[::\] for IPv6.
@@ -526,6 +527,13 @@ Allow SecurityLabels to function within the container. This allows separation of
 ### SecurityLabelType=
 
 Set the label process type for the container processes.
+
+### ServiceName=
+
+By default, Quadlet will name the systemd service unit using the name of the Quadlet.
+Setting this key overrides this behavior by instructing Quadlet to use the provided name.
+
+Note, the name should not include the `.service` file extension
 
 ### ShmSize=
 

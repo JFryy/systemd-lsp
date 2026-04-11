@@ -38,6 +38,10 @@ Specify the volume driver name. When set to `image`, the `Image` key must also b
 
 This is equivalent to the Podman `--driver` option.
 
+### GID=
+
+The GID that the volume will be created as. Differently than `Group=`, the specified value is not passed to the mount operation. The specified GID will own the volume’s mount point directory and affects the volume chown operation.
+
 ### GlobalArgs=
 
 This key contains a list of arguments passed directly between `podman` and `volume`
@@ -52,7 +56,7 @@ This key can be listed multiple times.
 
 ### Group=
 
-The host (numeric) GID, or group name to use as the group for the volume
+The host (numeric) GID, or group name to use as the group for the volume. Differently than `GID`, the specified value is passed to the mount operation.
 
 ### Image=
 
@@ -92,13 +96,24 @@ escaped to allow inclusion of whitespace and other control characters.
 
 This key can be listed multiple times.
 
+### ServiceName=
+
+By default, Quadlet will name the systemd service unit by appending `-volume` to the name of the Quadlet.
+Setting this key overrides this behavior by instructing Quadlet to use the provided name.
+
+Note, the name should not include the `.service` file extension
+
 ### Type=
 
 The filesystem type of `Device` as used by the **mount(8)** commands `-t` option.
 
+### UID=
+
+The UID that the volume will be created as. Differently than `User`, the specified value is not passed to the mount operation. The specified UID will own the volume’s mount point directory and affects the volume chown operation.
+
 ### User=
 
-The host (numeric) UID, or user name to use as the owner for the volume
+The host (numeric) UID, or user name to use as the owner for the volume. Differently than `UID`, the specified value is passed to the mount operation.
 
 ### VolumeName=
 

@@ -122,6 +122,13 @@ Number of times to retry the image pull when a HTTP error occurs. Equivalent to 
 
 Delay between retries. Equivalent to the Podman `--retry-delay` option.
 
+### ServiceName=
+
+By default, Quadlet will name the systemd service unit by appending `-image` to the name of the Quadlet.
+Setting this key overrides this behavior by instructing Quadlet to use the provided name.
+
+Note, the name should not include the `.service` file extension
+
 ### TLSVerify=
 
 Require HTTPS and verification of certificates when contacting registries.

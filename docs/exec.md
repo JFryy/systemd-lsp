@@ -138,8 +138,7 @@ Takes a comma-separated list of mount options that will be used on disk images s
 `RootImage=`. Optionally a partition name can be prefixed, followed by colon, in
 case the image has multiple partitions, otherwise partition name " `root`" is implied.
 Options for multiple partitions can be specified in a single line with space separators. Assigning an empty
-string removes previous assignments. Duplicated options are ignored. For a list of valid mount options, please
-refer to
+string removes previous assignments. For a list of valid mount options, please refer to
 [mount(8)](https://man7.org/linux/man-pages/man8/mount.8.html).
 
 
@@ -151,6 +150,43 @@ Valid partition names follow the
 
 This option is only available for system services and is not supported for services
 running in per-user instances of the service manager.
+
+When enabled for services running in per-user instances of the service manager
+using mount options is disabled by default, due to the security implications. It is possible to use a
+[polkit](https://www.freedesktop.org/software/polkit/docs/latest/) policy to allow
+specific mount options, for example:
+
+
+
+**Example 2. A polkit policy that allows mounting the root partition with nosuid**
+
+`/etc/polkit-1/rules.d/mountoptions.rules`:
+
+
+```
+polkit.addRule(function(action, subject) {
+    if (action.id == "io.systemd.mount-file-system.mount-untrusted-image-privately" &&
+            action.lookup("mount_options") == "root:nosuid") {
+        return polkit.Result.YES;
+    }
+});
+
+```
+
+**Example 3. A polkit policy that allows mounting the root partition with nosuid**
+
+`/etc/polkit-1/rules.d/mountoptions.rules`:
+
+
+```
+polkit.addRule(function(action, subject) {
+    if (action.id == "io.systemd.mount-file-system.mount-untrusted-image-privately" &&
+            action.lookup("mount_options") == "root:nosuid") {
+        return polkit.Result.YES;
+    }
+});
+
+```
 
 Added in version 247.
 
@@ -329,6 +365,30 @@ root=verity+signed+encrypted+unprotected+absent: \
 
 Added in version 254.
 
+### RootMStack=
+
+Takes a path to a
+[systemd.mstack(7)](systemd.mstack.html#)
+directory encapsulating a mount stack consisting of layers and bind mounts. Similar to
+`RootDirectory=` and `RootImage=` this runs the service off a
+distinct root file system, in this case set up via " `overlayfs`".
+
+Since `.mstack/` directories may reference disk images (DDIs) similar device
+policy extensions and dependencies are in effect when `RootMStack=` is used as are
+if `RootImage=` is used.
+
+In place of the image path a " `.v/`" versioned directory may be specified, see
+[systemd.v(7)](systemd.v.html#) for
+details.
+
+When enabled for services running in per-user instances of the service manager
+this option implicitly enables `PrivateUsers=` (requires unprivileged user namespaces
+support to be enabled in the kernel via the " `kernel.unprivileged_userns_clone=`" sysctl)
+and also relies on
+[systemd-mountfsd.service(8)](systemd-mountfsd.service.html#).
+
+Added in version 260.
+
 ### MountAPIVFS=
 
 Takes a boolean argument. If on, a private mount namespace for the unit's processes is created
@@ -416,16 +476,16 @@ Added in version 247.
 
 ### BindPaths=
 
-Configures unit-specific bind mounts. A bind mount makes a particular file or directory
-available at an additional place in the unit's view of the file system. Any bind mounts created with this
-option are specific to the unit, and are not visible in the host's mount table. This option expects a
-whitespace separated list of bind mount definitions. Each definition consists of a colon-separated triple of
-source path, destination path and option string, where the latter two are optional. If only a source path is
-specified the source and destination is taken to be the same. The option string may be either
-" `rbind`" or " `norbind`" for configuring a recursive or non-recursive bind
-mount. If the destination path is omitted, the option string must be omitted too.
-Each bind mount definition may be prefixed with " `-`", in which case it will be ignored
-when its source path does not exist.
+Configures unit-specific bind mounts. A bind mount makes a particular file or
+directory available at an additional place in the unit's view of the file system. Any bind mounts
+created with this option are specific to the unit, and are not visible in the host's mount
+table. This option expects a whitespace separated list of bind mount definitions. Each definition
+consists of a colon-separated triple of source path, destination path and option string, where the
+latter two are optional. If only a source path is specified the source and destination is taken to be
+the same. The option string may be either " `rbind`" or " `norbind`" for
+configuring a recursive or non-recursive bind mount. If the destination path is omitted, the option
+string must be omitted too. Each bind mount definition may be prefixed with " `-`", in
+which case it will be ignored when its source path does not exist or is not accessible.
 
 `BindPaths=` creates regular writable bind mounts (unless the source file system mount
 is already marked read-only), while `BindReadOnlyPaths=` creates read-only bind mounts. These
@@ -452,16 +512,16 @@ Added in version 233.
 
 ### BindReadOnlyPaths=
 
-Configures unit-specific bind mounts. A bind mount makes a particular file or directory
-available at an additional place in the unit's view of the file system. Any bind mounts created with this
-option are specific to the unit, and are not visible in the host's mount table. This option expects a
-whitespace separated list of bind mount definitions. Each definition consists of a colon-separated triple of
-source path, destination path and option string, where the latter two are optional. If only a source path is
-specified the source and destination is taken to be the same. The option string may be either
-" `rbind`" or " `norbind`" for configuring a recursive or non-recursive bind
-mount. If the destination path is omitted, the option string must be omitted too.
-Each bind mount definition may be prefixed with " `-`", in which case it will be ignored
-when its source path does not exist.
+Configures unit-specific bind mounts. A bind mount makes a particular file or
+directory available at an additional place in the unit's view of the file system. Any bind mounts
+created with this option are specific to the unit, and are not visible in the host's mount
+table. This option expects a whitespace separated list of bind mount definitions. Each definition
+consists of a colon-separated triple of source path, destination path and option string, where the
+latter two are optional. If only a source path is specified the source and destination is taken to be
+the same. The option string may be either " `rbind`" or " `norbind`" for
+configuring a recursive or non-recursive bind mount. If the destination path is omitted, the option
+string must be omitted too. Each bind mount definition may be prefixed with " `-`", in
+which case it will be ignored when its source path does not exist or is not accessible.
 
 `BindPaths=` creates regular writable bind mounts (unless the source file system mount
 is already marked read-only), while `BindReadOnlyPaths=` creates read-only bind mounts. These
@@ -531,6 +591,43 @@ support to be enabled in the kernel via the " `kernel.unprivileged_userns_clone=
 and also relies on
 [systemd-mountfsd.service(8)](systemd-mountfsd.service.html#).
 
+When enabled for services running in per-user instances of the service manager
+using mount options is disabled by default, due to the security implications. It is possible to use a
+[polkit](https://www.freedesktop.org/software/polkit/docs/latest/) policy to allow
+specific mount options, for example:
+
+
+
+**Example 4. A polkit policy that allows mounting the root partition with nosuid**
+
+`/etc/polkit-1/rules.d/mountoptions.rules`:
+
+
+```
+polkit.addRule(function(action, subject) {
+    if (action.id == "io.systemd.mount-file-system.mount-untrusted-image-privately" &&
+            action.lookup("mount_options") == "root:nosuid") {
+        return polkit.Result.YES;
+    }
+});
+
+```
+
+**Example 5. A polkit policy that allows mounting the root partition with nosuid**
+
+`/etc/polkit-1/rules.d/mountoptions.rules`:
+
+
+```
+polkit.addRule(function(action, subject) {
+    if (action.id == "io.systemd.mount-file-system.mount-untrusted-image-privately" &&
+            action.lookup("mount_options") == "root:nosuid") {
+        return polkit.Result.YES;
+    }
+});
+
+```
+
 Added in version 247.
 
 ### ExtensionImages=
@@ -571,14 +668,13 @@ or the host. See:
 To disable the safety check that the extension-release file name matches the image file name, the
 `x-systemd.relax-extension-release-check` mount option may be appended.
 
-This option can be used together with a `notify-reload` service type and
-[systemd.v(7)](systemd.v.html#)
-to manage configuration updates. When such a service carrying confext images is reloaded via
-**systemctl reload foo.service** or equivalent D-Bus method, the confext itself will
-be reloaded to pick up any changes. This only applies to confext extensions. Note that in case a
-service has this configuration enabled at first, and then it is subsequently removed in an update
-followed by a daemon-reload operation, reloading the confexts will be a no-op, and a full service
-restart is required instead. See
+If a service employs this option with
+[systemd.v(7)](systemd.v.html#),
+and has `RefreshOnReload=extensions` enabled (the default), the confexts will
+be refreshed to pick up any changes on service reload. This only applies to confext extensions.
+Note that in case a service has this configuration enabled at first, and then it is subsequently
+removed in an update followed by a daemon-reload operation, reloading the confexts will be a no-op,
+and a full service restart is required instead. See
 [systemd.service(5)](systemd.service.html#)
 also for details.
 
@@ -601,6 +697,43 @@ this option implicitly enables `PrivateUsers=` (requires unprivileged user names
 support to be enabled in the kernel via the " `kernel.unprivileged_userns_clone=`" sysctl)
 and also relies on
 [systemd-mountfsd.service(8)](systemd-mountfsd.service.html#).
+
+When enabled for services running in per-user instances of the service manager
+using mount options is disabled by default, due to the security implications. It is possible to use a
+[polkit](https://www.freedesktop.org/software/polkit/docs/latest/) policy to allow
+specific mount options, for example:
+
+
+
+**Example 6. A polkit policy that allows mounting the root partition with nosuid**
+
+`/etc/polkit-1/rules.d/mountoptions.rules`:
+
+
+```
+polkit.addRule(function(action, subject) {
+    if (action.id == "io.systemd.mount-file-system.mount-untrusted-image-privately" &&
+            action.lookup("mount_options") == "root:nosuid") {
+        return polkit.Result.YES;
+    }
+});
+
+```
+
+**Example 7. A polkit policy that allows mounting the root partition with nosuid**
+
+`/etc/polkit-1/rules.d/mountoptions.rules`:
+
+
+```
+polkit.addRule(function(action, subject) {
+    if (action.id == "io.systemd.mount-file-system.mount-untrusted-image-privately" &&
+            action.lookup("mount_options") == "root:nosuid") {
+        return polkit.Result.YES;
+    }
+});
+
+```
 
 Added in version 248.
 
@@ -630,14 +763,13 @@ file, with the appropriate metadata which matches `RootImage=`/ `RootDirectory=`
 or the host. See:
 [os-release(5)](os-release.html#).
 
-This option can be used together with a `notify-reload` service type and
-[systemd.v(7)](systemd.v.html#)
-to manage configuration updates. When such a service carrying confext directories is reloaded via
-**systemctl reload foo.service** or equivalent D-Bus method, the confext itself will
-be reloaded to pick up any changes. This only applies to confext extensions. Note that in case a
-service has this configuration enabled at first, and then it is subsequently removed in an update
-followed by a daemon-reload operation, reloading the confexts will be a no-op, and a full service
-restart is required instead. See
+If a service employs this option with
+[systemd.v(7)](systemd.v.html#),
+and has `RefreshOnReload=extensions` enabled (the default), the confexts will
+be refreshed to pick up any changes on service reload. This only applies to confext extensions.
+Note that in case a service has this configuration enabled at first, and then it is subsequently
+removed in an update followed by a daemon-reload operation, reloading the confexts will be a no-op,
+and a full service restart is required instead. See
 [systemd.service(5)](systemd.service.html#)
 also for details.
 
@@ -1960,7 +2092,7 @@ kernel default of " `private-anonymous
 for the meaning of the mapping types. When specified multiple times, all specified masks are
 ORed. When not set, or if the empty value is assigned, the inherited value is not changed.
 
-**Example 2. Add DAX pages to the dump filter**
+**Example 8. Add DAX pages to the dump filter**
 
 ```
 CoredumpFilter=default private-dax shared-dax
@@ -2045,7 +2177,7 @@ details.
 ### CPUSchedulingPolicy=
 
 Sets the CPU scheduling policy for executed processes. Takes one of `other`,
-`batch`, `idle`, `fifo` or `rr`. See
+`batch`, `idle`, `fifo`, `rr` or `ext`. See
 [sched\_setscheduler(2)](https://man7.org/linux/man-pages/man2/sched_setscheduler.2.html) for
 details.
 
@@ -2172,6 +2304,9 @@ network-facing ones), to ensure they cannot get access to private user data, unl
 actually require access to the user's private data. This setting is implied if
 `DynamicUser=` is set. This setting cannot ensure protection in all cases. In
 general it has the same limitations as `ReadOnlyPaths=`, see below.
+
+Note that this setting provides no protection if home directories are placed at a non-standard
+location, i.e. outside of the hierarchies listed above.
 
 This option is only available for system services, or for services running in per-user
 instances of the service manager in which case `PrivateUsers=` is implicitly enabled
@@ -2978,6 +3113,15 @@ stopped. Note that since the runtime directory `/run/` is a mount point of
 " `tmpfs`", then for system services the directories specified in
 `RuntimeDirectory=` are removed when the system is rebooted.
 
+If `DynamicUser=` is used together with
+`RuntimeDirectoryPreserve=` set to values other than `no`, the logic
+is slightly altered: the `RuntimeDirectory=` directories are created below
+`/run/private/`, which is a host directory made inaccessible to unprivileged
+users, which ensures that access to these directories cannot be gained through dynamic user ID
+recycling. Symbolic links are created to hide this difference in behaviour. Both from the
+perspective of the host and from inside the unit, the relevant directories hence always appear
+directly below `/run/`.
+
 Added in version 235.
 
 ### TimeoutCleanSec=
@@ -3675,6 +3819,38 @@ kernel, or the kernel does not support controlling KSM at the process level thro
 
 Added in version 254.
 
+### MemoryTHP=
+
+Transparent Hugepages (THPs) is a Linux kernel feature that manages memory
+using larger pages (2MB on x86, compared to the default 4KB). The main goal is to improve memory management
+efficiency and system performance, especially for memory-intensive applications.
+However, it can cause drawbacks in some scenarios, such as memory regression and latency spikes.
+THP policy is governed for the entire system via `/sys/kernel/mm/transparent_hugepage/enabled`.
+However, it can be overridden for individual workloads via
+[prctl(2)](https://man7.org/linux/man-pages/man2/prctl.2.html).
+`MemoryTHP=` may be used to disable THPs at process invocation time to stop providing
+THPs for workloads where the drawbacks outweigh the advantages.
+When `MemoryTHP=` is set to " `inherit`" or not set at all, systemd
+inherits THP settings from the process that starts it and no
+[prctl(2)](https://man7.org/linux/man-pages/man2/prctl.2.html) `PR_SET_THP_DISABLE` call is made.
+When set to " `disable`", `MemoryTHP=` disables THPs completely for the process,
+irrespecitive of global THP controls.
+When set to " `madvise`", `MemoryTHP=` disables THPs for the process except when
+specifically requested via [madvise(2)](https://man7.org/linux/man-pages/man2/madvise.2.html)
+by the process with `MADV_HUGEPAGE` or `MADV_COLLAPSE`.
+When set to " `system`", `MemoryTHP=` resets the THP policy to system wide policy.
+This can be used when the process that starts systemd has already disabled THPs via
+`PR_SET_THP_DISABLE`, and we want to restore the system default THP setting at
+process invocation time. For details, see
+[Transparent Hugepage Support](https://docs.kernel.org/admin-guide/mm/transhuge.html)
+in the kernel documentation.
+
+Note that this functionality might not be available, for example if THP is disabled in the
+kernel, or the kernel does not support controlling THP at the process level through
+[prctl(2)](https://man7.org/linux/man-pages/man2/prctl.2.html).
+
+Added in version 260.
+
 ### PrivatePIDs=
 
 Takes a boolean argument. Defaults to false. If enabled, sets up a new PID namespace
@@ -3699,16 +3875,17 @@ Added in version 257.
 
 ### PrivateUsers=
 
-Takes a boolean argument or one of " `self`", " `identity`",
-or " `full`". Defaults to false. If enabled, sets up a new user namespace for the
-executed processes and configures a user and group mapping. If set to a true value or
-" `self`", a minimal user and group mapping is configured that maps the
-" `root`" user and group as well as the unit's own user and group to themselves and
-everything else to the " `nobody`" user and group. This is useful to securely detach
-the user and group databases used by the unit from the rest of the system, and thus to create an
-effective sandbox environment. All files, directories, processes, IPC objects and other resources
-owned by users/groups not equaling " `root`" or the unit's own will stay visible from
-within the unit but appear owned by the " `nobody`" user and group.
+Takes a boolean argument or one of " `self`",
+" `identity`", " `full`" or " `managed`". Defaults to
+false. If enabled, sets up a new user namespace for the executed processes and configures a user and
+group mapping. If set to a true value or " `self`", a minimal user and group mapping is
+configured that maps the " `root`" user and group as well as the unit's own user and
+group to themselves and everything else to the " `nobody`" user and group. This is
+useful to securely detach the user and group databases used by the unit from the rest of the system,
+and thus to create an effective sandbox environment. All files, directories, processes, IPC objects
+and other resources owned by users/groups not equaling " `root`" or the unit's own will
+stay visible from within the unit but appear owned by the " `nobody`" user and
+group.
 
 If the parameter is " `identity`", user namespacing is set up with an identity
 mapping for the first 65536 UIDs/GIDs. Any UIDs/GIDs above 65536 will be mapped to the
@@ -3721,14 +3898,21 @@ mapping for all UIDs/GIDs. In addition, for system services, " `full`" allows th
 to call `setgroups()` system calls (by setting
 `/proc/pid/setgroups` to " `allow`").
 Similar to " `identity`", this does not provide UID/GID isolation, but it does provide
-process capability isolation.
+process capability isolation. If this mode is enabled, all unit processes are run without privileges
+in the host user namespace (regardless of whether the unit's own user/group is
+" `root`" or not). Specifically this means that the process will have zero process
+capabilities on the host's user namespace, but full capabilities within the service's user
+namespace. Settings such as `CapabilityBoundingSet=` will affect only the latter,
+and there's no way to acquire additional capabilities in the host's user namespace.
 
-If this mode is enabled, all unit processes are run without privileges in the host user
-namespace (regardless of whether the unit's own user/group is " `root`" or not). Specifically
-this means that the process will have zero process capabilities on the host's user namespace, but
-full capabilities within the service's user namespace. Settings such as
-`CapabilityBoundingSet=` will affect only the latter, and there's no way to acquire
-additional capabilities in the host's user namespace.
+If the parameter is " `managed`" a transient, dynamically allocated range of
+65536 UIDs/GIDs is allocated for the unit, and a UID/GID mapping is assigned to the unit's process
+so the UID/GID 0 from inside the unit maps to the first UID/GID of the allocated mapping. Note that
+in this mode the UID/GID the service process will run as is different depending if looking from the
+host side (where it will be a high, dynamically assigned UID) or from inside the unit (where it will
+be 0). Also note that this mode will enable file system UID mapping for the file systems this service
+accesses, mapping the "foreign" UID range on disk to the selected dynamic UID range at
+runtime.
 
 When this setting is set up by a per-user instance of the service manager, the mapping of the
 " `root`" user and group to itself is omitted (unless the user manager is root).
@@ -4101,7 +4285,7 @@ Accepts a list of BPF commands to allow or " `any`" to allow everything.
 Defaults to none. The accepted values are:
 
 
-`BPFMapCreate` `BPFMapLookupElem` `BPFMapUpdateElem` `BPFMapDeleteElem` `BPFMapGetNextKey` `BPFProgLoad` `BPFObjPin` `BPFObjGet` `BPFProgAttach` `BPFProgDetach` `BPFProgTestRun` `BPFProgGetNextId` `BPFMapGetNextId` `BPFProgGetFdById` `BPFMapGetFdById` `BPFObjGetInfoByFd` `BPFProgQuery` `BPFRawTracepointOpen` `BPFBtfLoad` `BPFBtfGetFdById` `BPFTaskFdQuery` `BPFMapLookupAndDeleteElem` `BPFMapFreeze` `BPFBtfGetNextId` `BPFMapLookupBatch` `BPFMapLookupAndDeleteBatch` `BPFMapUpdateBatch` `BPFMapDeleteBatch` `BPFLinkCreate` `BPFLinkUpdate` `BPFLinkGetFdById` `BPFLinkGetNextId` `BPFEnableStats` `BPFIterCreate` `BPFLinkDetach` `BPFProgBindMap` `BPFTokenCreate` `BPFProgStreamReadByFd`
+`BPFMapCreate` `BPFMapLookupElem` `BPFMapUpdateElem` `BPFMapDeleteElem` `BPFMapGetNextKey` `BPFProgLoad` `BPFObjPin` `BPFObjGet` `BPFProgAttach` `BPFProgDetach` `BPFProgTestRun` `BPFProgGetNextId` `BPFMapGetNextId` `BPFProgGetFdById` `BPFMapGetFdById` `BPFObjGetInfoByFd` `BPFProgQuery` `BPFRawTracepointOpen` `BPFBtfLoad` `BPFBtfGetFdById` `BPFTaskFdQuery` `BPFMapLookupAndDeleteElem` `BPFMapFreeze` `BPFBtfGetNextId` `BPFMapLookupBatch` `BPFMapLookupAndDeleteBatch` `BPFMapUpdateBatch` `BPFMapDeleteBatch` `BPFLinkCreate` `BPFLinkUpdate` `BPFLinkGetFdById` `BPFLinkGetNextId` `BPFEnableStats` `BPFIterCreate` `BPFLinkDetach` `BPFProgBindMap` `BPFTokenCreate` `BPFProgStreamReadByFd` `BPFProgAssocStructOps`
 
 This will set the `delegate_cmds` bpffs mount option.
 
@@ -4146,7 +4330,7 @@ Accepts a list of BPF attach points to allow or " `any`" to allow everything.
 Defaults to none. The accepted values are:
 
 
-`BPFCgroupInetIngress` `BPFCgroupInetEgress` `BPFCgroupInetSockCreate` `BPFCgroupSockOps` `BPFSkSkbStreamParser` `BPFSkSkbStreamVerdict` `BPFCgroupDevice` `BPFSkMsgVerdict` `BPFCgroupInet4Bind` `BPFCgroupInet6Bind` `BPFCgroupInet4Connect` `BPFCgroupInet6Connect` `BPFCgroupInet4PostBind` `BPFCgroupInet6PostBind` `BPFCgroupUdp4Sendmsg` `BPFCgroupUdp6Sendmsg` `BPFLircMode2` `BPFFlowDissector` `BPFCgroupSysctl` `BPFCgroupUdp4Recvmsg` `BPFCgroupUdp6Recvmsg` `BPFCgroupGetsockopt` `BPFCgroupSetsockopt` `BPFTraceRawTp` `BPFTraceFentry` `BPFTraceFexit` `BPFModifyReturn` `BPFLsmMac` `BPFTraceIter` `BPFCgroupInet4Getpeername` `BPFCgroupInet6Getpeername` `BPFCgroupInet4Getsockname` `BPFCgroupInet6Getsockname` `BPFXdpDevmap` `BPFCgroupInetSockRelease` `BPFXdpCpumap` `BPFSkLookup` `BPFXdp` `BPFSkSkbVerdict` `BPFSkReuseportSelect` `BPFSkReuseportSelectOrMigrate` `BPFPerfEvent` `BPFTraceKprobeMulti` `BPFLsmCgroup` `BPFStructOps` `BPFNetfilter` `BPFTcxIngress` `BPFTcxEgress` `BPFTraceUprobeMulti` `BPFCgroupUnixConnect` `BPFCgroupUnixSendmsg` `BPFCgroupUnixRecvmsg` `BPFCgroupUnixGetpeername` `BPFCgroupUnixGetsockname` `BPFNetkitPrimary` `BPFNetkitPeer` `BPFTraceKprobeSession` `BPFTraceUprobeSession`
+`BPFCgroupInetIngress` `BPFCgroupInetEgress` `BPFCgroupInetSockCreate` `BPFCgroupSockOps` `BPFSkSkbStreamParser` `BPFSkSkbStreamVerdict` `BPFCgroupDevice` `BPFSkMsgVerdict` `BPFCgroupInet4Bind` `BPFCgroupInet6Bind` `BPFCgroupInet4Connect` `BPFCgroupInet6Connect` `BPFCgroupInet4PostBind` `BPFCgroupInet6PostBind` `BPFCgroupUdp4Sendmsg` `BPFCgroupUdp6Sendmsg` `BPFLircMode2` `BPFFlowDissector` `BPFCgroupSysctl` `BPFCgroupUdp4Recvmsg` `BPFCgroupUdp6Recvmsg` `BPFCgroupGetsockopt` `BPFCgroupSetsockopt` `BPFTraceRawTp` `BPFTraceFentry` `BPFTraceFexit` `BPFModifyReturn` `BPFLsmMac` `BPFTraceIter` `BPFCgroupInet4Getpeername` `BPFCgroupInet6Getpeername` `BPFCgroupInet4Getsockname` `BPFCgroupInet6Getsockname` `BPFXdpDevmap` `BPFCgroupInetSockRelease` `BPFXdpCpumap` `BPFSkLookup` `BPFXdp` `BPFSkSkbVerdict` `BPFSkReuseportSelect` `BPFSkReuseportSelectOrMigrate` `BPFPerfEvent` `BPFTraceKprobeMulti` `BPFLsmCgroup` `BPFStructOps` `BPFNetfilter` `BPFTcxIngress` `BPFTcxEgress` `BPFTraceUprobeMulti` `BPFCgroupUnixConnect` `BPFCgroupUnixSendmsg` `BPFCgroupUnixRecvmsg` `BPFCgroupUnixGetpeername` `BPFCgroupUnixGetsockname` `BPFNetkitPrimary` `BPFNetkitPeer` `BPFTraceKprobeSession` `BPFTraceUprobeSession` `BPFTraceFsession`
 
 This will set the `delegate_attachs` bpffs mount option.
 

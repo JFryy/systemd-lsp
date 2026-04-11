@@ -8,6 +8,7 @@ BPFDelegateMaps
 BPFDelegatePrograms
 BPFProgram
 BindLogSockets
+BindNetworkInterface
 BindPaths
 BindReadOnlyPaths
 BusName
@@ -27,7 +28,6 @@ ConfigurationDirectory
 ConfigurationDirectoryMode
 CoredumpFilter
 CoredumpReceive
-DefaultStartupMemoryLow
 Delegate
 DelegateNamespaces
 DelegateSubgroup
@@ -122,6 +122,7 @@ MemoryMin
 MemoryPressureThresholdSec
 MemoryPressureWatch
 MemorySwapMax
+MemoryTHP
 MemoryZSwapMax
 MemoryZSwapWriteback
 MountAPIVFS
@@ -164,6 +165,7 @@ ProtectProc
 ProtectSystem
 ReadOnlyPaths
 ReadWritePaths
+RefreshOnReload
 ReloadSignal
 RemainAfterExit
 RemoveIPC
@@ -189,6 +191,7 @@ RootHashSignature
 RootImage
 RootImageOptions
 RootImagePolicy
+RootMStack
 RootVerity
 RuntimeDirectory
 RuntimeDirectoryMode

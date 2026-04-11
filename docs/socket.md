@@ -63,7 +63,7 @@ traditional [inetd(8)](https://www.freebsd.org/cgi/man.cgi?inetd(8))-style
 socket passing (i.e. sockets passed in via standard input and output, using
 `StandardInput=socket` in the service file).
 
-All network sockets allocated through `.socket` units are allocated in the host's network
+By default, network sockets allocated through `.socket` units are allocated in the host's network
 namespace (see [network\_namespaces(7)](https://man7.org/linux/man-pages/man7/network_namespaces.7.html)). This
 does not mean however that the service activated by a configured socket unit has to be part of the host's network
 namespace as well. It is supported and even good practice to run services in their own network namespace (for
@@ -73,6 +73,11 @@ the sockets configured through socket-activation from the host's namespace. In s
 the host's network namespace is only permitted through the activation sockets passed in while all sockets allocated
 from the service code itself will be associated with the service's own namespace, and thus possibly subject to a
 restrictive configuration.
+
+Alternatively, it is possible to run a `.socket` unit in another network namespace
+by setting `PrivateNetwork=yes` in combination with `JoinsNamespaceOf=`, see
+[systemd.exec(5)](systemd.exec.html#) and
+[systemd.unit(5)](systemd.unit.html#) for details.
 
 *Based on [systemd.socket(5)](https://www.freedesktop.org/software/systemd/man/systemd.socket.html) official documentation.*
 

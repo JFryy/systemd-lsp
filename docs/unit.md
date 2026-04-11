@@ -574,8 +574,11 @@ Takes a value of
 " `isolate`",
 " `flush`",
 " `ignore-dependencies`" or
-" `ignore-requirements`". Defaults to
-" `replace`". Specifies how the units listed in
+" `ignore-requirements`".
+" `OnFailureJobMode=`" defaults to
+" `replace`",
+" `OnSuccessJobMode=`" defaults to
+" `fail`". Specifies how the units listed in
 `OnSuccess=`/ `OnFailure=` will be enqueued. See
 [systemctl(1)](systemctl.html#)'s
 `--job-mode=` option for details on the
@@ -594,8 +597,11 @@ Takes a value of
 " `isolate`",
 " `flush`",
 " `ignore-dependencies`" or
-" `ignore-requirements`". Defaults to
-" `replace`". Specifies how the units listed in
+" `ignore-requirements`".
+" `OnFailureJobMode=`" defaults to
+" `replace`",
+" `OnSuccessJobMode=`" defaults to
+" `fail`". Specifies how the units listed in
 `OnSuccess=`/ `OnFailure=` will be enqueued. See
 [systemctl(1)](systemctl.html#)'s
 `--job-mode=` option for details on the
@@ -1376,6 +1382,14 @@ detected. It is not detected whether the file system backing the loopback block 
 
 Added in version 246.
 
+### ConditionPathIsSocket=
+
+`ConditionPathIsSocket=` is similar to
+`ConditionPathExists=` but verifies that a certain path exists and is a
+socket.
+
+Added in version 260.
+
 ### ConditionDirectoryNotEmpty=
 
 `ConditionDirectoryNotEmpty=` is similar to
@@ -1874,6 +1888,20 @@ into.
 Added in version 218.
 
 ### AssertPathIsEncrypted=
+
+Similar to the `ConditionArchitecture=`,
+`ConditionVirtualization=`, …, condition settings described above, these settings
+add assertion checks to the start-up of the unit. However, unlike the conditions settings, any
+assertion setting that is not met results in failure of the start job (which means this is logged
+loudly). Note that hitting a configured assertion does not cause the unit to enter the
+" `failed`" state (or in fact result in any state change of the unit), it affects
+only the job queued for it. Use assertion expressions for units that cannot operate when specific
+requirements are not met, and when this is something the administrator or user should look
+into.
+
+Added in version 218.
+
+### AssertPathIsSocket=
 
 Similar to the `ConditionArchitecture=`,
 `ConditionVirtualization=`, …, condition settings described above, these settings

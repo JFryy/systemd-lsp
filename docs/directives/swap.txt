@@ -8,6 +8,7 @@ BPFDelegateMaps
 BPFDelegatePrograms
 BPFProgram
 BindLogSockets
+BindNetworkInterface
 BindPaths
 BindReadOnlyPaths
 CPUAffinity
@@ -26,7 +27,6 @@ ConfigurationDirectory
 ConfigurationDirectoryMode
 CoredumpFilter
 CoredumpReceive
-DefaultStartupMemoryLow
 Delegate
 DelegateNamespaces
 DelegateSubgroup
@@ -109,6 +109,7 @@ MemoryMin
 MemoryPressureThresholdSec
 MemoryPressureWatch
 MemorySwapMax
+MemoryTHP
 MemoryZSwapMax
 MemoryZSwapWriteback
 MountAPIVFS
@@ -163,6 +164,7 @@ RootHashSignature
 RootImage
 RootImageOptions
 RootImagePolicy
+RootMStack
 RootVerity
 RuntimeDirectory
 RuntimeDirectoryMode

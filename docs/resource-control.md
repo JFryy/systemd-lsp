@@ -308,16 +308,6 @@ useful in order to always inherit all of the protection afforded by ancestors.
 This controls the " `memory.min`" or " `memory.low`" control group attribute.
 For details about this control group attribute, see [Memory Interface Files](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
 
-Units may have their children use a default " `memory.min`" or
-" `memory.low`" value by specifying `DefaultMemoryMin=` or
-`DefaultMemoryLow=`, which has the same semantics as
-`MemoryMin=` and `MemoryLow=`, or `DefaultStartupMemoryLow=`
-which has the same semantics as `StartupMemoryLow=`.
-This setting does not affect " `memory.min`" or " `memory.low`"
-in the unit itself.
-Using it to set a default child allocation is only useful on kernels older than 5.7,
-which do not support the " `memory_recursiveprot`" cgroup2 mount option.
-
 While `StartupMemoryLow=` applies to the startup and shutdown phases of the system,
 `MemoryMin=` applies to normal runtime of the system, and if the former is not set also to
 the startup and shutdown phases. Using `StartupMemoryLow=` allows prioritizing specific services at
@@ -350,16 +340,6 @@ useful in order to always inherit all of the protection afforded by ancestors.
 This controls the " `memory.min`" or " `memory.low`" control group attribute.
 For details about this control group attribute, see [Memory Interface Files](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
 
-Units may have their children use a default " `memory.min`" or
-" `memory.low`" value by specifying `DefaultMemoryMin=` or
-`DefaultMemoryLow=`, which has the same semantics as
-`MemoryMin=` and `MemoryLow=`, or `DefaultStartupMemoryLow=`
-which has the same semantics as `StartupMemoryLow=`.
-This setting does not affect " `memory.min`" or " `memory.low`"
-in the unit itself.
-Using it to set a default child allocation is only useful on kernels older than 5.7,
-which do not support the " `memory_recursiveprot`" cgroup2 mount option.
-
 While `StartupMemoryLow=` applies to the startup and shutdown phases of the system,
 `MemoryMin=` applies to normal runtime of the system, and if the former is not set also to
 the startup and shutdown phases. Using `StartupMemoryLow=` allows prioritizing specific services at
@@ -391,58 +371,6 @@ system. If assigned the special value " `infinity`", all available memory is pro
 useful in order to always inherit all of the protection afforded by ancestors.
 This controls the " `memory.min`" or " `memory.low`" control group attribute.
 For details about this control group attribute, see [Memory Interface Files](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-
-Units may have their children use a default " `memory.min`" or
-" `memory.low`" value by specifying `DefaultMemoryMin=` or
-`DefaultMemoryLow=`, which has the same semantics as
-`MemoryMin=` and `MemoryLow=`, or `DefaultStartupMemoryLow=`
-which has the same semantics as `StartupMemoryLow=`.
-This setting does not affect " `memory.min`" or " `memory.low`"
-in the unit itself.
-Using it to set a default child allocation is only useful on kernels older than 5.7,
-which do not support the " `memory_recursiveprot`" cgroup2 mount option.
-
-While `StartupMemoryLow=` applies to the startup and shutdown phases of the system,
-`MemoryMin=` applies to normal runtime of the system, and if the former is not set also to
-the startup and shutdown phases. Using `StartupMemoryLow=` allows prioritizing specific services at
-boot-up and shutdown differently than during normal runtime.
-
-Added in version 240.
-
-### DefaultStartupMemoryLow=
-
-These settings control the `memory` controller in the unified hierarchy.
-
-Specify the memory usage protection of the executed processes in this unit.
-When reclaiming memory, the unit is treated as if it was using less memory resulting in memory
-to be preferentially reclaimed from unprotected units.
-Using `MemoryLow=` results in a weaker protection where memory may still
-be reclaimed to avoid invoking the OOM killer in case there is no other reclaimable memory.
-
-For a protection to be effective, it is generally required to set a corresponding
-allocation on all ancestors, which is then distributed between children
-(with the exception of the root slice).
-Any `MemoryMin=` or `MemoryLow=` allocation that is not
-explicitly distributed to specific children is used to create a shared protection for all children.
-As this is a shared protection, the children will freely compete for the memory.
-
-Takes a memory size in bytes. If the value is suffixed with K, M, G or T, the specified memory size is
-parsed as Kilobytes, Megabytes, Gigabytes, or Terabytes (with the base 1024), respectively. Alternatively, a
-percentage value may be specified, which is taken relative to the installed physical memory on the
-system. If assigned the special value " `infinity`", all available memory is protected, which may be
-useful in order to always inherit all of the protection afforded by ancestors.
-This controls the " `memory.min`" or " `memory.low`" control group attribute.
-For details about this control group attribute, see [Memory Interface Files](https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files).
-
-Units may have their children use a default " `memory.min`" or
-" `memory.low`" value by specifying `DefaultMemoryMin=` or
-`DefaultMemoryLow=`, which has the same semantics as
-`MemoryMin=` and `MemoryLow=`, or `DefaultStartupMemoryLow=`
-which has the same semantics as `StartupMemoryLow=`.
-This setting does not affect " `memory.min`" or " `memory.low`"
-in the unit itself.
-Using it to set a default child allocation is only useful on kernels older than 5.7,
-which do not support the " `memory_recursiveprot`" cgroup2 mount option.
 
 While `StartupMemoryLow=` applies to the startup and shutdown phases of the system,
 `MemoryMin=` applies to normal runtime of the system, and if the former is not set also to
@@ -1310,6 +1238,34 @@ in the service unit, as it applies to the whole control group.
 
 Added in version 250.
 
+### BindNetworkInterface=
+
+Takes the name of a network interface. This option causes every socket created by processes of this
+unit to be bound to the specified network interface.
+
+
+It is specially useful to confine a process to a VRF, when the program does not offer native support
+for it. It is equivalent to running the program using `ip vrf exec`.
+
+
+In systems using `nss-resolve`, the interface used for DNS resolution can be chosen
+by using the `SYSTEMD_NSS_RESOLVE_IFINDEX` environment variable.
+
+The feature is implemented with `cgroup/sock_create` cgroup-bpf hooks.
+
+Example:
+
+```
+[Service]
+BindNetworkInterface=vrf-mgmt
+
+```
+
+This option cannot be bypassed by prefixing " `+`" to the executable path
+in the service unit, as it applies to the whole control group.
+
+Added in version 260.
+
 ### NFTSet=
 
 This setting provides a method for integrating dynamic cgroup, user and group IDs into
@@ -1666,7 +1622,8 @@ unprivileged services on the legacy hierarchy, even when requested.
 The following controller names may be specified: `cpu`,
 `cpuset`, `io`, `memory`, `pids`,
 `bpf-firewall`, `bpf-devices`, `bpf-foreign`,
-`bpf-socket-bind`, and `bpf-restrict-network-interfaces`.
+`bpf-socket-bind`, `bpf-restrict-network-interfaces`, and
+`bpf-bind-network-interface`.
 
 Not all of these controllers are available on all kernels however, and some are specific to
 the unified hierarchy while others are specific to the legacy hierarchy. Also note that the kernel
@@ -1720,7 +1677,8 @@ of the cgroup hierarchy is unmanaged by systemd.
 The following controller names may be specified: `cpu`,
 `cpuset`, `io`, `memory`, `pids`,
 `bpf-firewall`, `bpf-devices`, `bpf-foreign`,
-`bpf-socket-bind`, and `bpf-restrict-network-interfaces`.
+`bpf-socket-bind`, `bpf-restrict-network-interfaces`, and
+`bpf-bind-network-interface`.
 
 Added in version 240.
 

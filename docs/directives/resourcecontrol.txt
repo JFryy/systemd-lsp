@@ -1,11 +1,11 @@
 AllowedCPUs
 AllowedMemoryNodes
 BPFProgram
+BindNetworkInterface
 CPUQuota
 CPUQuotaPeriodSec
 CPUWeight
 CoredumpReceive
-DefaultStartupMemoryLow
 Delegate
 DelegateSubgroup
 DeviceAllow

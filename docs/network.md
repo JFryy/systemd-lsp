@@ -9,9 +9,8 @@ a network file named `$NAME.network`, the generated Podman network is called `sy
 the generated service file is `$NAME-network.service`. The `NetworkName` option allows for
 overriding this default name with a user-provided one.
 
-Please note that stopping the corresponding service will not remove the podman network.
-In addition, updating an existing network is not supported.
 In order to update the network parameters you will first need to manually remove the podman network and then restart the service.
+Set `NetworkDeleteOnStop=true` to override the behavior and delete the network when the device is stopped.
 
 Using network units allows containers to depend on networks being automatically pre-created. This is
 particularly interesting when using special options to control network creation, as Podman otherwise creates networks with the default options.
@@ -136,6 +135,13 @@ The format of this is a space separated list of arguments, which can optionally 
 escaped to allow inclusion of whitespace and other control characters.
 
 This key can be listed multiple times.
+
+### ServiceName=
+
+By default, Quadlet will name the systemd service unit by appending `-network` to the name of the Quadlet.
+Setting this key overrides this behavior by instructing Quadlet to use the provided name.
+
+Note, the name should not include the `.service` file extension
 
 ### Subnet=
 

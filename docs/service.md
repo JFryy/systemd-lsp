@@ -24,12 +24,6 @@ and in
 which configure resource control settings for the processes of the
 service.
 
-If SysV init compat is enabled, systemd automatically creates service units that wrap SysV init
-scripts (the service name is the same as the name of the script, with a " `.service`"
-suffix added); see
-[systemd-sysv-generator(8)](systemd-sysv-generator.html#).
-
-
 The [systemd-run(1)](systemd-run.html#)
 command allows creating `.service` and `.scope` units dynamically
 and transiently from the command line.
@@ -479,11 +473,31 @@ as "5min 20s". Defaults to 100ms.
 
 ### RestartSteps=
 
-Configures the number of steps to take to increase the interval
+Configures the number of exponential steps to take to increase the interval
 of auto-restarts from `RestartSec=` to `RestartMaxDelaySec=`.
-Takes a positive integer or 0 to disable it. Defaults to 0.
+Takes a positive integer or 0 to disable it. Defaults to 0. _Hint:_ values
+between 3 and 5 are good choices when exponential backoff is desired.
 
-This setting is effective only if `RestartMaxDelaySec=` is also set.
+Example:
+
+```
+RestartSec=10s
+RestartSteps=4
+RestartMaxDelaySec=160s
+```
+
+This will produce the following restart intervals: 10s, 20s, 40s, 80s, 160s, 160s, 160s, etc.
+Notice the geometric interpolation and the resulting constant ratio between intervals; here it is 2.
+The formula for the _ratio_ is
+
+( `RestartMaxDelaySec` / `RestartSec`)^(1 / `RestartSteps`)
+. A (repeating) delay equal to `RestartMaxDelaySec=` is always
+reached after
+`RestartSteps` \+ 1
+steps.
+
+This setting is effective only if `RestartMaxDelaySec=` is also set and
+`RestartSec=` is not zero.
 
 Added in version 254.
 
@@ -494,7 +508,8 @@ as the interval goes up with `RestartSteps=`. Takes a value
 in the same format as `RestartSec=`, or " `infinity`"
 to disable the setting. Defaults to " `infinity`".
 
-This setting is effective only if `RestartSteps=` is also set.
+This setting is effective only if `RestartSteps=` is also set and
+`RestartSec=` is not zero.
 
 Added in version 254.
 
@@ -1134,4 +1149,24 @@ effect unless `Type=` `notify-reload` is used, see
 above.
 
 Added in version 253.
+
+### RefreshOnReload=
+
+Takes a boolean argument, or a list of resources defined in
+[systemd.exec(5)](systemd.exec.html#).
+Possible values are `extensions` and `credentials`, separated by space.
+Prepending the list with a single tilde character (" `~`") inverts the effect.
+Defaults to `extensions`. An empty assignment resets the list to default. If enabled,
+the corresponding resources ( `ExtensionImages=`/ `ExtensionDirectories=`
+for `extensions` and `LoadCredential=`/ `ImportCredential=`/
+`SetCredential=` (along with their `Encrypted` counterparts)
+for `credentials`) will be refreshed on service reload. If `yes`,
+all resources listed above that are used by the service shall be refreshed.
+
+Specially, if this option is set explicitly, and the respective resources are in use,
+the service may be reloaded without any actual reload mechanism ( `ExecReload=`
+or `Type=notify-reload`) for notifying the main process, in which case the reload
+is considered complete immediately after refreshing.
+
+Added in version 260.
 

@@ -20,6 +20,7 @@ Pull
 Retry
 RetryDelay
 Secret
+ServiceName
 SetWorkingDirectory
 TLSVerify
 Target

@@ -2,12 +2,15 @@ ContainersConfModule
 Copy
 Device
 Driver
+GID
 GlobalArgs
 Group
 Image
 Label
 Options
 PodmanArgs
+ServiceName
 Type
+UID
 User
 VolumeName

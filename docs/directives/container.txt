@@ -70,6 +70,7 @@ SecurityLabelFileType
 SecurityLabelLevel
 SecurityLabelNested
 SecurityLabelType
+ServiceName
 ShmSize
 StartWithPod
 StopSignal

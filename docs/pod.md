@@ -9,6 +9,11 @@ By default, the Podman pod has the same name as the unit, but with a `systemd-` 
 a `$name.pod` file creates a `$name-pod.service` unit and a `systemd-$name` Podman pod. The
 `PodName` option allows for overriding this default name with a user-provided one.
 
+The generated service defaults to `Restart=on-failure`. Note that with `ExitPolicy=stop` (the
+default for Quadlet pods), the pod exits cleanly (exit code 0) when all its containers stop, so
+`on-failure` will **not** trigger a restart in that case. To have the pod automatically restart
+when containers exit, set `Restart=always` in the `[Service]` section of the `.pod` file.
+
 Valid options for `[Pod]` are listed below:
 
 *Based on [podman-systemd.unit(5)](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html) official documentation.*
@@ -77,7 +82,6 @@ Set the pod’s hostname inside all containers.
 The given hostname is also added to the /etc/hosts file using the container’s primary IP address (also see the `--add-host` option).
 
 Equivalent to the Podman `--hostname` option.
-This key can be listed multiple times.
 
 ### IP=
 
@@ -146,7 +150,8 @@ Exposes a port, or a range of ports (e.g. `50-59`), from the pod to the host. Eq
 to the Podman `--publish` option. The format is similar to the Podman options, which is of
 the form `ip:hostPort:containerPort`, `ip::containerPort`, `hostPort:containerPort` or
 `containerPort`, where the number of host and container ports must be the same (in the case
-of a range).
+of a range). The protocol can be provided at the end, e.g., `hostPort:containerPort/tcp`.
+Valid protocols are `tcp` and `udp`; the `sctp` protocol is supported only for rootful containers.
 
 If the IP is set to 0.0.0.0 or not set at all, the port is bound on all IPv4 addresses on
 the host; use \[::\] for IPv6.

@@ -186,6 +186,13 @@ Pass secret information used in Containerfile build stages in a safe way.
 This is equivalent to the `--secret` option of `podman build` and generally has the form
 `secret[,opt=opt ...]`.
 
+### ServiceName=
+
+By default, Quadlet will name the systemd service unit by appending `-build` to the name of the Quadlet.
+Setting this key overrides this behavior by instructing Quadlet to use the provided name.
+
+Note, the name should not include the `.service` file extension
+
 ### SetWorkingDirectory=
 
 Provide context (a working directory) to `podman build`. Supported values are a path, a URL, or the

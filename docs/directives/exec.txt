@@ -67,6 +67,7 @@ LogsDirectoryMode
 LogsDirectoryQuota
 MemoryDenyWriteExecute
 MemoryKSM
+MemoryTHP
 MountAPIVFS
 MountFlags
 MountImagePolicy
@@ -114,6 +115,7 @@ RootHashSignature
 RootImage
 RootImageOptions
 RootImagePolicy
+RootMStack
 RootVerity
 RuntimeDirectory
 RuntimeDirectoryMode

@@ -8,6 +8,7 @@ LogDriver
 Network
 PodmanArgs
 PublishPort
+ServiceName
 SetWorkingDirectory
 UserNS
 Yaml

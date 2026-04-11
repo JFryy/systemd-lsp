@@ -29,6 +29,7 @@ AssertPathIsDirectory
 AssertPathIsEncrypted
 AssertPathIsMountPoint
 AssertPathIsReadWrite
+AssertPathIsSocket
 AssertPathIsSymbolicLink
 AssertSecurity
 AssertUser
@@ -67,6 +68,7 @@ ConditionPathIsDirectory
 ConditionPathIsEncrypted
 ConditionPathIsMountPoint
 ConditionPathIsReadWrite
+ConditionPathIsSocket
 ConditionPathIsSymbolicLink
 ConditionSecurity
 ConditionUser
