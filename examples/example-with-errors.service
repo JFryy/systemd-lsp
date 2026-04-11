@@ -9,7 +9,7 @@
 # Line 13: ERROR - Invalid ProtectSystem value 'invalid'
 # Line 14: ERROR - Invalid StandardOutput value 'invalid-stream'
 # Line 15: ERROR - Invalid NotifyAccess value 'invalid-access'
-# Line 17: ERROR - Unknown section: [UnknownSection]
+# Line 17: WARNING - Unknown section: [UnknownSection]
 # Line 20: WARNING - Unknown directive 'AnotherBadDirective' in [Unit] section
 []
 [Unit]

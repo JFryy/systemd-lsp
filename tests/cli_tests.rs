@@ -215,7 +215,7 @@ fn test_expected_error_count() {
         .filter(|line| line.contains("error") || line.contains("warning") || line.contains("unknown"))
         .collect();
 
-    // We expect 9 diagnostics total (7 errors + 2 warnings)
+    // We expect 9 diagnostics total (6 errors + 3 warnings)
     // This is a regression test - if this number changes, it might indicate
     // a change in diagnostic behavior
     assert!(
@@ -227,8 +227,8 @@ fn test_expected_error_count() {
 
     // Verify the summary shows both errors and warnings
     assert!(
-        stdout.contains("7 error(s)") && stdout.contains("2 warning(s)"),
-        "Summary should show 7 errors and 2 warnings"
+        stdout.contains("6 error(s)") && stdout.contains("3 warning(s)"),
+        "Summary should show 6 errors and 3 warnings"
     );
 }
 

@@ -51,13 +51,20 @@ impl SystemdDiagnostics {
 
     fn validate_section(&self, section: &SystemdSection, diagnostics: &mut Vec<Diagnostic>) {
         if !self.valid_sections.contains(section.name.as_str()) {
-            diagnostics.push(Diagnostic::new_simple(
-                Range::new(
+            diagnostics.push(Diagnostic {
+                range: Range::new(
                     Position::new(section.line_range.0, 0),
                     Position::new(section.line_range.0, section.name.len() as u32 + 2),
                 ),
-                format!("Unknown section: [{}]", section.name),
-            ));
+                message: format!("Unknown section: [{}]", section.name),
+                severity: Some(DiagnosticSeverity::WARNING),
+                code: None,
+                code_description: None,
+                source: None,
+                related_information: None,
+                tags: None,
+                data: None,
+            });
             return;
         }
 
