@@ -12,7 +12,7 @@ impl SystemdConstants {
     // this is stored in docs and _should_ be generated from
     // from the parent documentation to keep it up to date
     // and not prone to human error.
-    */
+     */
     pub fn section_directives() -> HashMap<&'static str, Vec<&'static str>> {
         let mut map = HashMap::new();
 
@@ -315,7 +315,10 @@ impl SystemdConstants {
         let mut map = HashMap::new();
         map.insert("exec", include_str!("../docs/exec.md"));
         map.insert("kill", include_str!("../docs/kill.md"));
-        map.insert("resource-control", include_str!("../docs/resource-control.md"));
+        map.insert(
+            "resource-control",
+            include_str!("../docs/resource-control.md"),
+        );
         map
     }
 
