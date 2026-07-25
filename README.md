@@ -56,25 +56,46 @@ The project is built using Cargo, Rust's package manager. The `--release` flag o
 
 Add this configuration to your Neovim setup:
 ```lua
--- Automatically set filetype and start LSP for systemd and Podman Quadlet unit files
-vim.api.nvim_create_autocmd("BufEnter", {
-    pattern = {
-        -- systemd unit files
-        "*.service", "*.socket", "*.timer", "*.mount", "*.automount",
-        "*.swap", "*.target", "*.path", "*.slice", "*.scope", "*.device",
-        -- Podman Quadlet files
-        "*.container", "*.volume", "*.network", "*.kube", "*.pod", "*.build", "*.image"
-    },
-    callback = function()
-        vim.bo.filetype = "systemd"
-        vim.lsp.start({
-            name = 'systemd_ls',
-            cmd = { '/path/to/systemd-lsp' }, -- Update this path to your systemd-lsp binary
-            root_dir = vim.fn.getcwd(),
-        })
-    end,
-})
+do
+	---@param t table<string,string[]> {filetype, patterns[]}
+	---@return table<string,string>
+	local function populate_table(t)
+		local tmp = {}
+		for filetype, files in pairs(t) do
+			for _, file in pairs(files) do
+				tmp[file] = filetype
+			end
+		end
+		return tmp
+	end
+
+    --defines systemd and podman quadlet filetypes
+    local ext_patterns = {
+        systemd = {
+            "service", "socket", "timer", "mount", "automount",
+            "swap", "target", "path", "slice", "scope", "device",
+        },
+        podman = {
+            "container", "volume", "network", "kube", "pod", "build", "image"
+        }
+    }
+
+    vim.filetype.add {
+		extension = populate_table(ext_patterns),
+		filename = {},
+		pattern = {}
+	}
+
+    vim.lsp.config ["systemd_lsp"] = {
+    	cmd = {os.getenv "HOME".."/.cargo/bin/systemd-lsp"}, -- for linux
+	--	cmd = {os.getenv "USERPROFILE".."\\.cargo\\bin\\systemd-lsp"} -- for windows
+        filetypes = {"systemd", "podman"}
+    }
+
+	vim.lsp.enable "systemd_lsp"
+end
 ```
+
 
 ### Vim
 
