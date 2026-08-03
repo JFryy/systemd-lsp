@@ -12,11 +12,14 @@ BindNetworkInterface
 BindPaths
 BindReadOnlyPaths
 CPUAffinity
+CPUPressureThresholdSec
+CPUPressureWatch
 CPUQuota
 CPUQuotaPeriodSec
 CPUSchedulingPolicy
 CPUSchedulingPriority
 CPUSchedulingResetOnFork
+CPUSetPartition
 CPUWeight
 CacheDirectory
 CacheDirectoryAccounting
@@ -48,6 +51,8 @@ Group
 IOAccounting
 IODeviceLatencyTargetSec
 IODeviceWeight
+IOPressureThresholdSec
+IOPressureWatch
 IOReadBandwidthMax
 IOReadIOPSMax
 IOSchedulingClass
@@ -126,6 +131,7 @@ NetworkNamespacePath
 Nice
 NoExecPaths
 NoNewPrivileges
+OOMRules
 OOMScoreAdjust
 Options
 PAMName

@@ -2,8 +2,11 @@ AllowedCPUs
 AllowedMemoryNodes
 BPFProgram
 BindNetworkInterface
+CPUPressureThresholdSec
+CPUPressureWatch
 CPUQuota
 CPUQuotaPeriodSec
+CPUSetPartition
 CPUWeight
 CoredumpReceive
 Delegate
@@ -15,6 +18,8 @@ FinalKillSignal
 IOAccounting
 IODeviceLatencyTargetSec
 IODeviceWeight
+IOPressureThresholdSec
+IOPressureWatch
 IOReadBandwidthMax
 IOReadIOPSMax
 IOWeight
@@ -44,6 +49,7 @@ MemoryZSwapMax
 MemoryZSwapWriteback
 NFTSet
 OOMPolicy
+OOMRules
 RestartKillSignal
 RestrictNetworkInterfaces
 RuntimeMaxSec

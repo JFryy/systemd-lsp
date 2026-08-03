@@ -195,6 +195,16 @@ Files (including directories) with names that match certain patterns are
 generally ignored. This includes names that start with a " `.`" or
 end with a " `.ignore`".
 
+When unit aliasing is introduced during reload/reexec (e.g., converting
+`b.service` to a symlink pointing to `a.service`), the running
+state of the canonical unit ( `a.service`) is preserved. The old serialized state
+of the now-aliased unit is migrated to a new stub orphaned unit to prevent stale data from
+corrupting the canonical unit's live state. Dependencies referencing the alias name are automatically
+resolved to the canonical unit, and the dependency graph is rebuilt from unit files, ensuring
+consistency. If the now-aliased unit had resources such as running processes, they will now be tracked
+under the new orphaned unit. Once all resources are gone (e.g. all processes have exited) the orphaned
+unit will be garbage collected automatically.
+
 The unit file format is covered by the
 [Interface\
 Portability and Stability Promise](https://systemd.io/PORTABILITY_AND_STABILITY/).
@@ -723,6 +733,11 @@ not necessary. Note that if this mode is used unit results (such as exit codes, 
 resources, …) are flushed out immediately after the unit completed, except for what is stored in the logging
 subsystem. Defaults to `inactive`.
 
+Since v261, if `FileDescriptorStorePreserve=` is set to `yes`,
+and the unit has file descriptors stored, garbage collection will be disabled until the unit is
+removed, the service manager exits, or the file descriptors get `EPOLLHUP` or
+`EPOLLERR`.
+
 Added in version 236.
 
 ### FailureAction=
@@ -736,6 +751,16 @@ inactive state. Takes one of `none`, `reboot`,
 `halt-force` and `halt-immediate`. In system mode, all options are
 allowed. In user mode, only `none`, `exit`, and
 `exit-force` are allowed. Both options default to `none`.
+
+These actions are tied to the unit's state transitions and fire only when the unit actually
+transitions out of an `active` or `activating` state. As a
+consequence, `Condition…=` and `Assert…=` directives that fail do
+_not_ trigger `SuccessAction=` or
+`FailureAction=`: they prevent activation in the first place, so no state transition
+occurs. By contrast, the `ExecCondition=` directive in
+[systemd.service(5)](systemd.service.html#)
+runs as part of activation, so an `ExecCondition=` skip _will_
+trigger `SuccessAction=`.
 
 If `none` is set, no action will be triggered. `reboot` causes a
 reboot following the normal shutdown procedure (i.e. equivalent to **systemctl**
@@ -772,6 +797,16 @@ inactive state. Takes one of `none`, `reboot`,
 `halt-force` and `halt-immediate`. In system mode, all options are
 allowed. In user mode, only `none`, `exit`, and
 `exit-force` are allowed. Both options default to `none`.
+
+These actions are tied to the unit's state transitions and fire only when the unit actually
+transitions out of an `active` or `activating` state. As a
+consequence, `Condition…=` and `Assert…=` directives that fail do
+_not_ trigger `SuccessAction=` or
+`FailureAction=`: they prevent activation in the first place, so no state transition
+occurs. By contrast, the `ExecCondition=` directive in
+[systemd.service(5)](systemd.service.html#)
+runs as part of activation, so an `ExecCondition=` skip _will_
+trigger `SuccessAction=`.
 
 If `none` is set, no action will be triggered. `reboot` causes a
 reboot following the normal shutdown procedure (i.e. equivalent to **systemctl**
@@ -1139,6 +1174,35 @@ details about the machine ID. The test may be negated by prepending an exclamati
 
 Added in version 244.
 
+### ConditionFraction=
+
+`ConditionFraction=` may be used to enable a unit on a stable,
+pseudo-random subset of a fleet of machines. It is primarily useful for staged rollouts: the same
+unit (or drop-in) is distributed to every machine in a fleet, but only the configured fraction of
+them will actually have it enabled. The decision is derived locally from the machine ID (see
+[machine-id(5)](machine-id.html#)), so
+it requires no central coordination and is stable over time: a given machine always lands on the
+same side of the threshold.
+
+The argument consists of an optional _`tag`_ followed by a percentage,
+separated by whitespace, for example " `30%`" or
+" `myrollout 30%`". The percentage may include up to two decimal places (e.g.
+" `0.5%`"). The condition is satisfied on approximately the configured percentage of
+all machines; " `0%`" matches no machine and " `100%`" matches every
+machine.
+
+The optional tag is an arbitrary string (not containing whitespace) that is mixed into the
+derivation, so that independent rollouts select _independent_ subsets of the
+fleet. Without it, all untagged `ConditionFraction=` checks would select the very
+same machines (the same machines would always be picked first). Use distinct tags for unrelated
+rollouts, and a shared tag to deliberately target the same machines across several units.
+
+The test may be negated by prepending an exclamation mark, in which case it is satisfied on the
+complementary fraction of machines (e.g. " `!myrollout 30%`" matches the other ≈70%).
+If the machine ID cannot be determined, the condition fails.
+
+Added in version 261.
+
 ### ConditionKernelCommandLine=
 
 `ConditionKernelCommandLine=` may be used to check whether a
@@ -1227,6 +1291,10 @@ ValueDescriptionselinuxSELinux MACapparmorAppArmor MACtomoyoTomoyo MACsmackSMACK
 Platform Firmware Profile)cvmConfidential virtual machine (SEV/TDX)measured-ukiUnified Kernel Image with PCR 11 Measurements, as per [systemd-stub(7)](systemd-stub.html#).
 
 Added in version 255.
+
+measured-osOS PCR measurements enabled. This is typically equivalent to `measured-uki`, however may also be set explicitly via the `systemd.tpm2_measured_os=` kernel command line switch, see [kernel-command-line(7)](kernel-command-line.html#) for details. The various system services doing boot and runtime measurements are conditioned on this flag.
+
+Added in version 261.
 
 The test may be negated by prepending an exclamation mark.
 
@@ -1560,6 +1628,22 @@ If the given key is not found in the file, the match is done against an empty va
 
 Added in version 249.
 
+### ConditionMachineTag=
+
+`ConditionMachineTag=` may be used to match against the tags
+assigned to the local machine. Machine tags are short labels that classify and group machines for
+management purposes; they are configured in the `TAGS=` field of
+[machine-info(5)](machine-info.html#) and
+may be queried and changed with the **tags** command of
+[hostnamectl(1)](hostnamectl.html#). The
+argument is a single tag pattern, which is compared against each of the configured tags using
+shell-style globbing (" `*`", " `?`", " `[]`"). The
+condition is satisfied if at least one of the configured tags matches the pattern. The test may be
+negated by prepending an exclamation mark, in which case it is satisfied if none of the configured
+tags matches.
+
+Added in version 261.
+
 ### ConditionMemoryPressure=
 
 Verify that the overall system (memory, CPU or IO) pressure is below or equal to a threshold.
@@ -1650,6 +1734,20 @@ into.
 Added in version 218.
 
 ### AssertHost=
+
+Similar to the `ConditionArchitecture=`,
+`ConditionVirtualization=`, …, condition settings described above, these settings
+add assertion checks to the start-up of the unit. However, unlike the conditions settings, any
+assertion setting that is not met results in failure of the start job (which means this is logged
+loudly). Note that hitting a configured assertion does not cause the unit to enter the
+" `failed`" state (or in fact result in any state change of the unit), it affects
+only the job queued for it. Use assertion expressions for units that cannot operate when specific
+requirements are not met, and when this is something the administrator or user should look
+into.
+
+Added in version 218.
+
+### AssertFraction=
 
 Similar to the `ConditionArchitecture=`,
 `ConditionVirtualization=`, …, condition settings described above, these settings
@@ -2042,6 +2140,20 @@ into.
 Added in version 218.
 
 ### AssertOSRelease=
+
+Similar to the `ConditionArchitecture=`,
+`ConditionVirtualization=`, …, condition settings described above, these settings
+add assertion checks to the start-up of the unit. However, unlike the conditions settings, any
+assertion setting that is not met results in failure of the start job (which means this is logged
+loudly). Note that hitting a configured assertion does not cause the unit to enter the
+" `failed`" state (or in fact result in any state change of the unit), it affects
+only the job queued for it. Use assertion expressions for units that cannot operate when specific
+requirements are not met, and when this is something the administrator or user should look
+into.
+
+Added in version 218.
+
+### AssertMachineTag=
 
 Similar to the `ConditionArchitecture=`,
 `ConditionVirtualization=`, …, condition settings described above, these settings

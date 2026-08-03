@@ -307,6 +307,12 @@ Special Cases:
 
 - If the `name` of the image ends with `.build`, Quadlet will use the image built by the corresponding `.build` file, and the generated systemd service contains a dependency on the `$name-build.service`. Note: the corresponding `.build` file must exist.
 
+### ImageVolume=
+
+Tells Podman how to handle the builtin image volumes. Default is **anonymous**.
+In the past, a **bind** option was accepted as well. This is deprecated, and currently aliased to **anonymous**.
+Equivalent to the Podman `--image-volume` option.
+
 ### IP=
 
 Specify a static IPv4 address for the container, for example **10.88.64.128**.

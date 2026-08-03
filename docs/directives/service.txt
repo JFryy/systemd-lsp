@@ -13,11 +13,14 @@ BindPaths
 BindReadOnlyPaths
 BusName
 CPUAffinity
+CPUPressureThresholdSec
+CPUPressureWatch
 CPUQuota
 CPUQuotaPeriodSec
 CPUSchedulingPolicy
 CPUSchedulingPriority
 CPUSchedulingResetOnFork
+CPUSetPartition
 CPUWeight
 CacheDirectory
 CacheDirectoryAccounting
@@ -59,6 +62,8 @@ GuessMainPID
 IOAccounting
 IODeviceLatencyTargetSec
 IODeviceWeight
+IOPressureThresholdSec
+IOPressureWatch
 IOReadBandwidthMax
 IOReadIOPSMax
 IOSchedulingClass
@@ -139,6 +144,7 @@ NoNewPrivileges
 NonBlocking
 NotifyAccess
 OOMPolicy
+OOMRules
 OOMScoreAdjust
 OpenFile
 PAMName

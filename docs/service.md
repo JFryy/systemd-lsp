@@ -182,11 +182,11 @@ Specifies when the manager should consider the service to be finished. One of `m
 
 - If set to `main` (the default), the service manager
 will consider the unit stopped when the main process, which is determined according to the
-`Type=`, exits. Consequently, it cannot be used with
-`Type=` `oneshot`.
+`Type=`, exits.
 
 - If set to `cgroup`, the service will be considered running as long as at
-least one process in the cgroup has not exited.
+least one process in the cgroup has not exited. This option cannot be used with
+`Type=` `oneshot`.
 
 
 It is generally recommended to use `ExitType=` `main` when a service has
@@ -350,6 +350,15 @@ commands are skipped and the unit is _not_ marked as failed. However, if an
 `ExecCondition=` command exits with 255 or abnormally (e.g. timeout, killed by a
 signal, etc.), the unit will be considered failed (and remaining commands will be skipped). Exit code of 0 or
 those matching `SuccessExitStatus=` will continue execution to the next commands.
+
+Note that an `ExecCondition=` skip is _not_ equivalent to a
+unit-level `Condition…=` or `Assert…=` check failing. Because
+`ExecCondition=` runs as part of the activation transition, a skip causes the unit to
+transition from `active` to `inactive`, and consequently
+`SuccessAction=` (see
+[systemd.unit(5)](systemd.unit.html#)) will be
+honored. By contrast, `Condition…=` directives in the " `[Unit]`" section
+prevent activation entirely and therefore do not trigger `SuccessAction=`.
 
 The same recommendations about not running long-running processes in `ExecStartPre=`
 also applies to `ExecCondition=`. `ExecCondition=` will also run the commands
@@ -1031,14 +1040,39 @@ Added in version 219.
 ### FileDescriptorStorePreserve=
 
 Takes one of `no`, `yes`,
-`restart` and controls when to release the service's file descriptor store
-(i.e. when to close the contained file descriptors, if any). If set to `no` the
-file descriptor store is automatically released when the service is stopped; if
-`restart` (the default) it is kept around as long as the unit is neither inactive
-nor failed, or a job is queued for the service, or the service is expected to be restarted. If
-`yes` the file descriptor store is kept around until the unit is removed from
-memory (i.e. is not referenced anymore and inactive). The latter is useful to keep entries in the
-file descriptor store pinned until the service manager exits.
+`restart`, `on-success` and controls when to release the
+service's file descriptor store (i.e. when to close the contained file descriptors, if any). If set
+to `no` the file descriptor store is automatically released when the service is
+stopped; if `restart` (the default) it is kept around as long as the unit is
+neither inactive nor failed, or a job is queued for the service, or the service is expected to be
+restarted. If `yes` the file descriptor store is kept around and garbage
+collection of the unit is disabled. The latter is useful to keep entries in the file descriptor
+store pinned until the unit is removed, the service manager exits, or the file descriptors get
+`EPOLLHUP` or `EPOLLERR`. If `on-success`
+the behaviour is identical to `yes`, except that the file descriptor store is
+discarded if the unit enters the permanent " `failed`" state (i.e. once all automated
+restart attempts driven by `Restart=` have been exhausted). The store is preserved
+across the transitionary failed states that precede each individual auto-restart attempt.
+
+When set to `yes` or `on-success`, and the service is
+itself running under another service manager (e.g. a service of `user@.service`,
+or a payload inside
+[systemd-nspawn(1)](systemd-nspawn.html#)),
+file descriptors pushed into the store are also forwarded one level up via the enveloping manager's
+`$NOTIFY_SOCKET`, tagged with the originating unit id, so that they are preserved
+across restarts of the inner manager and handed back to the originating unit when it is started
+again. For this to take effect, the enveloping unit must itself enable
+`FileDescriptorStoreMax=` and a non- `no`/ `restart`
+value for `FileDescriptorStorePreserve=`.
+See the [File Descriptor Store](https://systemd.io/FILE_DESCRIPTOR_STORE)
+overview for details.
+
+Setting this to `yes` or `on-success` also ensures the
+file descriptor store is kept loaded across a " `kexec`"-based reboot on kernels
+supporting the [Live Update Orchestrator](https://docs.kernel.org/userspace-api/liveupdate.html),
+so that compatible file descriptors (such as [memfd\_create(2)](https://man7.org/linux/man-pages/man2/memfd_create.2.html))
+are preserved and handed back to the service on the other side. See the [File Descriptor Store](https://systemd.io/FILE_DESCRIPTOR_STORE) overview for
+details.
 
 Use **systemctl clean --what=fdstore …** to release the file descriptor store
 explicitly.

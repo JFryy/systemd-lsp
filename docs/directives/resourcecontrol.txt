@@ -2,8 +2,11 @@ AllowedCPUs
 AllowedMemoryNodes
 BPFProgram
 BindNetworkInterface
+CPUPressureThresholdSec
+CPUPressureWatch
 CPUQuota
 CPUQuotaPeriodSec
+CPUSetPartition
 CPUWeight
 CoredumpReceive
 Delegate
@@ -14,6 +17,8 @@ DisableControllers
 IOAccounting
 IODeviceLatencyTargetSec
 IODeviceWeight
+IOPressureThresholdSec
+IOPressureWatch
 IOReadBandwidthMax
 IOReadIOPSMax
 IOWeight
@@ -40,6 +45,7 @@ MemorySwapMax
 MemoryZSwapMax
 MemoryZSwapWriteback
 NFTSet
+OOMRules
 RestrictNetworkInterfaces
 Slice
 SocketBindAllow

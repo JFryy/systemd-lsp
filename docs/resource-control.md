@@ -569,12 +569,15 @@ Added in version 253.
 
 This setting controls the `memory` controller in the unified hierarchy.
 
-Takes a boolean argument. When true, pages stored in the Zswap cache are permitted to be
-written to the backing storage, false otherwise. Defaults to true. This allows disabling
-writeback of swap pages for IO-intensive applications, while retaining the ability to store
-compressed pages in Zswap. See the kernel's
+Takes a boolean argument. Defaults to true if `DefaultMemoryZSwapWriteback=`
+is not set. When true, pages stored in the Zswap cache are permitted to be
+written to the backing storage, false otherwise. This allows disabling writeback of swap pages for
+IO-intensive applications, while retaining the ability to store compressed pages in Zswap. See the kernel's
 [Zswap](https://docs.kernel.org/admin-guide/mm/zswap.html) documentation
 for more details.
+
+The system default for this setting may be controlled with `DefaultMemoryZSwapWriteback=`
+in [systemd-system.conf(5)](systemd-system.conf.html#).
 
 Added in version 256.
 
@@ -619,6 +622,23 @@ boot-up and shutdown differently than during normal runtime.
 This setting is supported only with the unified control group hierarchy.
 
 Added in version 244.
+
+### CPUSetPartition=
+
+Sets the `cpuset` partition type for the executed processes. Takes one
+of " `member`", " `root`", or " `isolated`". This setting
+controls the " `cpuset.cpus.partition`" cgroup attribute.
+
+When set to " `member`", the cpuset operates in normal mode.
+" `root`" creates a partition root, which can further divide CPUs among child cgroups.
+" `isolated`" provides full CPU isolation, useful for real-time workloads that
+require dedicated CPU resources without interference from other processes.
+Defaults to the kernel default, which is " `member`". For more details about this
+control group attribute, see [Control Groups v2](https://docs.kernel.org/admin-guide/cgroup-v2.html).
+
+This setting requires `AllowedCPUs=` to also be set.
+
+Added in version 261.
 
 ### TasksAccounting=
 
@@ -1300,7 +1320,7 @@ Example:
 
 
 ```
-[Unit]
+[Service]
 NFTSet=cgroup:inet:filter:my_service user:inet:filter:serviceuser
 
 ```
@@ -1803,6 +1823,31 @@ and [oomd.conf(5)](oomd.conf.html#).
 
 Added in version 248.
 
+### OOMRules=
+
+Takes a space-separated list of OOM ruleset names. The rulesets are defined in
+`.oomrule` files placed in
+`/etc/systemd/oomd/rules.d/`,
+`/run/systemd/oomd/rules.d/`,
+`/usr/local/lib/systemd/oomd/rules.d/`, or
+`/usr/lib/systemd/oomd/rules.d/`. When set,
+[systemd-oomd.service(8)](systemd-oomd.service.html#)
+will monitor this unit's cgroup and evaluate the specified rulesets against it.
+Each ruleset defines conditions (such as memory pressure or swap usage thresholds) and an action
+to take when those conditions are met. See
+[oomd.conf(5)](oomd.conf.html#) for
+details on the available ruleset options.
+
+Setting this property will also result in `After=` and
+`Wants=` dependencies on `systemd-oomd.service` unless
+`DefaultDependencies=no`.
+
+Defaults to an empty list, which means no rulesets are applied. Note that each monitored
+cgroup incurs a per-interval walk of its descendant cgroup tree, so monitoring very large numbers of
+cgroups via `OOMRules=` may have a measurable performance impact.
+
+Added in version 261.
+
 ### MemoryPressureWatch=
 
 Controls memory pressure monitoring for invoked processes. Takes a boolean or one of
@@ -1822,8 +1867,8 @@ the two environment variables are not set.
 Note that services are free to use the two environment variables, but it is unproblematic if
 they ignore them. Memory pressure handling must be implemented individually in each service, and
 usually means different things for different software. For further details on memory pressure
-handling see [Memory Pressure Handling in\
-systemd](https://systemd.io/MEMORY_PRESSURE).
+handling see [Resource Pressure Handling in\
+systemd](https://systemd.io/PRESSURE).
 
 Services implemented using
 [sd-event(3)](sd-event.html#) may use
@@ -1848,6 +1893,96 @@ pressure event is signalled to the service, per 2s window. If not specified, def
 details on the permitted syntax.
 
 Added in version 254.
+
+### CPUPressureWatch=
+
+Controls CPU pressure monitoring for invoked processes. Takes a boolean or one of
+" `auto`" and " `skip`". If " `no`", tells the service not
+to watch for CPU pressure events, by setting the `$CPU_PRESSURE_WATCH`
+environment variable to the literal string `/dev/null`. If " `yes`",
+tells the service to watch for CPU pressure events. This ensures the
+`cpu.pressure` cgroup attribute file is accessible for
+reading and writing by the service's user. It then sets the `$CPU_PRESSURE_WATCH`
+environment variable for processes invoked by the unit to the file system path to this file. The
+threshold information configured with `CPUPressureThresholdSec=` is encoded in
+the `$CPU_PRESSURE_WRITE` environment variable. If the " `auto`"
+value is set the protocol is enabled if CPU resource controls are configured for the unit (e.g. because
+`CPUWeight=` or `CPUQuota=` is set), and
+disabled otherwise. If set to " `skip`" the logic is neither enabled, nor disabled and
+the two environment variables are not set.
+
+Note that services are free to use the two environment variables, but it is unproblematic if
+they ignore them. CPU pressure handling must be implemented individually in each service, and
+usually means different things for different software.
+
+Services implemented using
+[sd-event(3)](sd-event.html#) may use
+[sd\_event\_add\_cpu\_pressure(3)](sd_event_add_cpu_pressure.html#)
+to watch for and handle CPU pressure events.
+
+If not explicitly set, defaults to the `DefaultCPUPressureWatch=` setting in
+[systemd-system.conf(5)](systemd-system.conf.html#).
+
+Added in version 261.
+
+### CPUPressureThresholdSec=
+
+Sets the CPU pressure threshold time for CPU pressure monitor as configured via
+`CPUPressureWatch=`. Specifies the maximum CPU stall time before a CPU
+pressure event is signalled to the service, per 2s window. If not specified, defaults to the
+`DefaultCPUPressureThresholdSec=` setting in
+[systemd-system.conf(5)](systemd-system.conf.html#)
+(which in turn defaults to 200ms). The specified value expects a time unit such as
+" `ms`" or " `μs`", see
+[systemd.time(7)](systemd.time.html#) for
+details on the permitted syntax.
+
+Added in version 261.
+
+### IOPressureWatch=
+
+Controls IO pressure monitoring for invoked processes. Takes a boolean or one of
+" `auto`" and " `skip`". If " `no`", tells the service not
+to watch for IO pressure events, by setting the `$IO_PRESSURE_WATCH`
+environment variable to the literal string `/dev/null`. If " `yes`",
+tells the service to watch for IO pressure events. This enables IO accounting for the
+service, and ensures the `io.pressure` cgroup attribute file is accessible for
+reading and writing by the service's user. It then sets the `$IO_PRESSURE_WATCH`
+environment variable for processes invoked by the unit to the file system path to this file. The
+threshold information configured with `IOPressureThresholdSec=` is encoded in
+the `$IO_PRESSURE_WRITE` environment variable. If the " `auto`"
+value is set the protocol is enabled if IO accounting is anyway enabled for the unit (e.g. because
+`IOWeight=` or `IODeviceWeight=` is set), and
+disabled otherwise. If set to " `skip`" the logic is neither enabled, nor disabled and
+the two environment variables are not set.
+
+Note that services are free to use the two environment variables, but it is unproblematic if
+they ignore them. IO pressure handling must be implemented individually in each service, and
+usually means different things for different software.
+
+Services implemented using
+[sd-event(3)](sd-event.html#) may use
+[sd\_event\_add\_io\_pressure(3)](sd_event_add_io_pressure.html#)
+to watch for and handle IO pressure events.
+
+If not explicitly set, defaults to the `DefaultIOPressureWatch=` setting in
+[systemd-system.conf(5)](systemd-system.conf.html#).
+
+Added in version 261.
+
+### IOPressureThresholdSec=
+
+Sets the IO pressure threshold time for IO pressure monitor as configured via
+`IOPressureWatch=`. Specifies the maximum IO stall time before an IO
+pressure event is signalled to the service, per 2s window. If not specified, defaults to the
+`DefaultIOPressureThresholdSec=` setting in
+[systemd-system.conf(5)](systemd-system.conf.html#)
+(which in turn defaults to 200ms). The specified value expects a time unit such as
+" `ms`" or " `μs`", see
+[systemd.time(7)](systemd.time.html#) for
+details on the permitted syntax.
+
+Added in version 261.
 
 ### CoredumpReceive=
 

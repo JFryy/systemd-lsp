@@ -4734,6 +4734,10 @@ silently ignored. This option may be specified more than once in which case all 
 If the empty string is assigned to this option, the list of files to read is reset, all prior assignments
 have no effect.
 
+Note that shell variables such as " `$HOME`" are not expanded in this path.
+Use " `%`"-specifiers instead; for example, " `%h`" expands to the
+user's home directory.
+
 The files listed with this directive will be read shortly before the process is executed (more
 specifically, after all processes from a previous unit state terminated. This means you can generate these
 files in one unit state, and read it with this option in the next. The files are read from the file

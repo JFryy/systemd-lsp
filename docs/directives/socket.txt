@@ -18,11 +18,14 @@ BindReadOnlyPaths
 BindToDevice
 Broadcast
 CPUAffinity
+CPUPressureThresholdSec
+CPUPressureWatch
 CPUQuota
 CPUQuotaPeriodSec
 CPUSchedulingPolicy
 CPUSchedulingPriority
 CPUSchedulingResetOnFork
+CPUSetPartition
 CPUWeight
 CacheDirectory
 CacheDirectoryAccounting
@@ -63,6 +66,8 @@ Group
 IOAccounting
 IODeviceLatencyTargetSec
 IODeviceWeight
+IOPressureThresholdSec
+IOPressureWatch
 IOReadBandwidthMax
 IOReadIOPSMax
 IOSchedulingClass
@@ -160,6 +165,7 @@ Nice
 NoDelay
 NoExecPaths
 NoNewPrivileges
+OOMRules
 OOMScoreAdjust
 PAMName
 PassCredentials

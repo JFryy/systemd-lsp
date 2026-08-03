@@ -195,6 +195,16 @@ Files (including directories) with names that match certain patterns are
 generally ignored. This includes names that start with a " `.`" or
 end with a " `.ignore`".
 
+When unit aliasing is introduced during reload/reexec (e.g., converting
+`b.service` to a symlink pointing to `a.service`), the running
+state of the canonical unit ( `a.service`) is preserved. The old serialized state
+of the now-aliased unit is migrated to a new stub orphaned unit to prevent stale data from
+corrupting the canonical unit's live state. Dependencies referencing the alias name are automatically
+resolved to the canonical unit, and the dependency graph is rebuilt from unit files, ensuring
+consistency. If the now-aliased unit had resources such as running processes, they will now be tracked
+under the new orphaned unit. Once all resources are gone (e.g. all processes have exited) the orphaned
+unit will be garbage collected automatically.
+
 The unit file format is covered by the
 [Interface\
 Portability and Stability Promise](https://systemd.io/PORTABILITY_AND_STABILITY/).
