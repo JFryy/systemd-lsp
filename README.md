@@ -88,7 +88,7 @@ do
 
     vim.lsp.config ["systemd_lsp"] = {
     	cmd = {os.getenv "HOME".."/.cargo/bin/systemd-lsp"}, -- for linux
-	--	cmd = {os.getenv "USERPROFILE".."\\.cargo\\bin\\systemd-lsp"} -- for windows
+	--	cmd = {os.getenv "USERPROFILE".."\\.cargo\\bin\\systemd-lsp"}, -- for windows
         filetypes = {"systemd", "podman"}
     }
 
