@@ -24,9 +24,6 @@
           version = cargo.package.version;
           src = self;
           cargoLock.lockFile = ./Cargo.lock;
-
-          # Skip tests - integration tests need the built binary which isn't available in sandbox
-          doCheck = false;
         };
 
         runtimeEnv = with pkgs; [

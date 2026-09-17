@@ -22,7 +22,7 @@ fn run_systemd_lsp(args: &[&str]) -> (String, String, i32) {
     let binary_path = if cfg!(windows) {
         "./target/release/systemd-lsp.exe"
     } else {
-        "./target/release/systemd-lsp"
+        env!("CARGO_BIN_EXE_systemd-lsp")
     };
 
     let output = Command::new(binary_path)
