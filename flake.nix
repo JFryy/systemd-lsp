@@ -23,10 +23,7 @@
           pname = cargo.package.name;
           version = cargo.package.version;
           src = self;
-          cargoHash = "sha256-VOL+PShh/NCNJIPLFoD2bLuDtWdOBWBeoX7BqTk8++o=";
-
-          # Skip tests - integration tests need the built binary which isn't available in sandbox
-          doCheck = false;
+          cargoLock.lockFile = ./Cargo.lock;
         };
 
         runtimeEnv = with pkgs; [
