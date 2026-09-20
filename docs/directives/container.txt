@@ -83,6 +83,7 @@ Timezone
 Tmpfs
 UIDMap
 Ulimit
+Umask
 Unmask
 User
 UserNS
