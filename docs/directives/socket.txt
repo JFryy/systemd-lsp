@@ -297,3 +297,6 @@ UtmpMode
 WatchdogSignal
 WorkingDirectory
 Writable
+XAttrAccept
+XAttrEntryPoint
+XAttrListen

@@ -720,6 +720,99 @@ for details.
 
 Added in version 196.
 
+### XAttrEntryPoint=
+
+Set an extended attribute on the socket, in the form
+" `NAME=VALUE`". The extended
+attribute's name must be in the " `user.`" namespace, i.e. begin with the four
+characters " `user.`". Specifiers are expanded in both the name and the value, see
+[systemd.unit(5)](systemd.unit.html#) for
+details on the available specifiers. These settings may be used more than once to set multiple
+extended attributes; assigning the empty string resets the list.
+
+The three variables control where the extended attributes are applied:
+`XAttrEntryPoint=` sets them on the file-system inode an
+`AF_UNIX` socket is bound to (i.e. the socket node visible in the file system at
+the specified listening path; this only applies to `AF_UNIX` sockets),
+`XAttrListen=` sets them on the listening socket, and
+`XAttrAccept=` sets them on the connection sockets accepted off the listening socket
+(and is thus only relevant in combination with
+`Accept=`" `yes`").
+
+This is primarily useful to tag sockets so that they can be discovered and classified by other
+tools. For example, Varlink entrypoint sockets are supposed to be tagged with
+" `user.varlink=entrypoint`" via `XAttrEntryPoint=`, which makes them
+discoverable via **varlinkctl list-sockets**, see
+[varlinkctl(1)](varlinkctl.html#).
+
+These settings require kernel support for extended attributes on socket inodes (available since
+Linux 7.0). Extended attributes that cannot be applied are logged at debug level and otherwise
+ignored.
+
+Added in version 262.
+
+### XAttrListen=
+
+Set an extended attribute on the socket, in the form
+" `NAME=VALUE`". The extended
+attribute's name must be in the " `user.`" namespace, i.e. begin with the four
+characters " `user.`". Specifiers are expanded in both the name and the value, see
+[systemd.unit(5)](systemd.unit.html#) for
+details on the available specifiers. These settings may be used more than once to set multiple
+extended attributes; assigning the empty string resets the list.
+
+The three variables control where the extended attributes are applied:
+`XAttrEntryPoint=` sets them on the file-system inode an
+`AF_UNIX` socket is bound to (i.e. the socket node visible in the file system at
+the specified listening path; this only applies to `AF_UNIX` sockets),
+`XAttrListen=` sets them on the listening socket, and
+`XAttrAccept=` sets them on the connection sockets accepted off the listening socket
+(and is thus only relevant in combination with
+`Accept=`" `yes`").
+
+This is primarily useful to tag sockets so that they can be discovered and classified by other
+tools. For example, Varlink entrypoint sockets are supposed to be tagged with
+" `user.varlink=entrypoint`" via `XAttrEntryPoint=`, which makes them
+discoverable via **varlinkctl list-sockets**, see
+[varlinkctl(1)](varlinkctl.html#).
+
+These settings require kernel support for extended attributes on socket inodes (available since
+Linux 7.0). Extended attributes that cannot be applied are logged at debug level and otherwise
+ignored.
+
+Added in version 262.
+
+### XAttrAccept=
+
+Set an extended attribute on the socket, in the form
+" `NAME=VALUE`". The extended
+attribute's name must be in the " `user.`" namespace, i.e. begin with the four
+characters " `user.`". Specifiers are expanded in both the name and the value, see
+[systemd.unit(5)](systemd.unit.html#) for
+details on the available specifiers. These settings may be used more than once to set multiple
+extended attributes; assigning the empty string resets the list.
+
+The three variables control where the extended attributes are applied:
+`XAttrEntryPoint=` sets them on the file-system inode an
+`AF_UNIX` socket is bound to (i.e. the socket node visible in the file system at
+the specified listening path; this only applies to `AF_UNIX` sockets),
+`XAttrListen=` sets them on the listening socket, and
+`XAttrAccept=` sets them on the connection sockets accepted off the listening socket
+(and is thus only relevant in combination with
+`Accept=`" `yes`").
+
+This is primarily useful to tag sockets so that they can be discovered and classified by other
+tools. For example, Varlink entrypoint sockets are supposed to be tagged with
+" `user.varlink=entrypoint`" via `XAttrEntryPoint=`, which makes them
+discoverable via **varlinkctl list-sockets**, see
+[varlinkctl(1)](varlinkctl.html#).
+
+These settings require kernel support for extended attributes on socket inodes (available since
+Linux 7.0). Extended attributes that cannot be applied are logged at debug level and otherwise
+ignored.
+
+Added in version 262.
+
 ### SELinuxContextFromNet=
 
 Takes a boolean argument. When true, systemd
@@ -750,19 +843,23 @@ understood to the base of 1024.
 
 ### MessageQueueMaxMessages=
 
-These two settings take integer values and
-control the mq\_maxmsg field or the mq\_msgsize field,
-respectively, when creating the message queue. Note that
-either none or both of these variables need to be set. See
+These two settings control the mq\_maxmsg field or
+the mq\_msgsize field, respectively, when creating the message queue.
+`MessageQueueMaxMessages=` takes an integer value.
+`MessageQueueMessageSize=` takes a size in bytes, and
+the usual suffixes K, M, G are supported and understood to the base of
+1024\. Note that either none or both of these variables need to be set. See
 [mq\_setattr(3)](http://linux.die.net/man/3/mq_setattr)
 for details.
 
 ### MessageQueueMessageSize=
 
-These two settings take integer values and
-control the mq\_maxmsg field or the mq\_msgsize field,
-respectively, when creating the message queue. Note that
-either none or both of these variables need to be set. See
+These two settings control the mq\_maxmsg field or
+the mq\_msgsize field, respectively, when creating the message queue.
+`MessageQueueMaxMessages=` takes an integer value.
+`MessageQueueMessageSize=` takes a size in bytes, and
+the usual suffixes K, M, G are supported and understood to the base of
+1024\. Note that either none or both of these variables need to be set. See
 [mq\_setattr(3)](http://linux.die.net/man/3/mq_setattr)
 for details.
 

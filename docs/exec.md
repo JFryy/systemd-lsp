@@ -1051,10 +1051,14 @@ Added in version 187.
 
 Controls the secure bits set for the executed process. Takes a space-separated combination of
 options from the following list: `keep-caps`, `keep-caps-locked`,
-`no-setuid-fixup`, `no-setuid-fixup-locked`, `noroot`, and
-`noroot-locked`. This option may appear more than once, in which case the secure bits are
+`no-setuid-fixup`, `no-setuid-fixup-locked`, `noroot`,
+`noroot-locked`, `no-cap-ambient-raise`, `no-cap-ambient-raise-locked`,
+`exec-restrict-file`, `exec-restrict-file-locked`,
+`exec-deny-interactive`, and `exec-deny-interactive-locked`.
+This option may appear more than once, in which case the secure bits are
 ORed. If the empty string is assigned to this option, the bits are reset to 0. This does not affect commands
-prefixed with " `+`". See [capabilities(7)](https://man7.org/linux/man-pages/man7/capabilities.7.html) for
+prefixed with " `+`". See [capabilities(7)](https://man7.org/linux/man-pages/man7/capabilities.7.html)
+and [Executability check](https://docs.kernel.org/userspace-api/check_exec.html) for
 details.
 
 ### SELinuxContext=
@@ -2213,12 +2217,16 @@ details.
 ### NUMAPolicy=
 
 Controls the NUMA memory policy of the executed processes. Takes a policy type, one of:
-`default`, `preferred`, `bind`, `interleave` and
-`local`. A list of NUMA nodes that should be associated with the policy must be specified
-in `NUMAMask=`. For more details on each policy please see,
+`default`, `preferred`, `bind`, `interleave`,
+`local`, `preferred-many` (requires Linux 5.15 or newer) and
+`weighted-interleave` (requires Linux 6.9 or newer, weights are configured via
+`/sys/kernel/mm/mempolicy/weighted_interleave/`). A list of NUMA nodes that should be
+associated with the policy must be specified in `NUMAMask=`. For more details on each
+policy please see,
 [set\_mempolicy(2)](https://man7.org/linux/man-pages/man2/set_mempolicy.2.html). For overall
 overview of NUMA support in Linux see,
 [numa(7)](https://man7.org/linux/man-pages/man7/numa.7.html).
+If the kernel does not support the requested policy, a warning is logged and the setting is ignored.
 
 
 Added in version 243.
@@ -4300,7 +4308,7 @@ Accepts a list of BPF maps to allow or " `any`" to allow everything.
 Defaults to none. The accepted values are:
 
 
-`BPFMapTypeUnspec` `BPFMapTypeHash` `BPFMapTypeArray` `BPFMapTypeProgArray` `BPFMapTypePerfEventArray` `BPFMapTypePercpuHash` `BPFMapTypePercpuArray` `BPFMapTypeStackTrace` `BPFMapTypeCgroupArray` `BPFMapTypeLruHash` `BPFMapTypeLruPercpuHash` `BPFMapTypeLpmTrie` `BPFMapTypeArrayOfMaps` `BPFMapTypeHashOfMaps` `BPFMapTypeDevmap` `BPFMapTypeSockmap` `BPFMapTypeCpumap` `BPFMapTypeXskmap` `BPFMapTypeSockhash` `BPFMapTypeCgroupStorageDeprecated` `BPFMapTypeReuseportSockarray` `BPFMapTypePercpuCgroupStorageDeprecated` `BPFMapTypeQueue` `BPFMapTypeStack` `BPFMapTypeSkStorage` `BPFMapTypeDevmapHash` `BPFMapTypeStructOps` `BPFMapTypeRingbuf` `BPFMapTypeInodeStorage` `BPFMapTypeTaskStorage` `BPFMapTypeBloomFilter` `BPFMapTypeUserRingbuf` `BPFMapTypeCgrpStorage` `BPFMapTypeArena` `BPFMapTypeInsnArray`
+`BPFMapTypeUnspec` `BPFMapTypeHash` `BPFMapTypeArray` `BPFMapTypeProgArray` `BPFMapTypePerfEventArray` `BPFMapTypePercpuHash` `BPFMapTypePercpuArray` `BPFMapTypeStackTrace` `BPFMapTypeCgroupArray` `BPFMapTypeLruHash` `BPFMapTypeLruPercpuHash` `BPFMapTypeLpmTrie` `BPFMapTypeArrayOfMaps` `BPFMapTypeHashOfMaps` `BPFMapTypeDevmap` `BPFMapTypeSockmap` `BPFMapTypeCpumap` `BPFMapTypeXskmap` `BPFMapTypeSockhash` `BPFMapTypeCgroupStorageDeprecated` `BPFMapTypeReuseportSockarray` `BPFMapTypePercpuCgroupStorageDeprecated` `BPFMapTypeQueue` `BPFMapTypeStack` `BPFMapTypeSkStorage` `BPFMapTypeDevmapHash` `BPFMapTypeStructOps` `BPFMapTypeRingbuf` `BPFMapTypeInodeStorage` `BPFMapTypeTaskStorage` `BPFMapTypeBloomFilter` `BPFMapTypeUserRingbuf` `BPFMapTypeCgrpStorage` `BPFMapTypeArena` `BPFMapTypeInsnArray` `BPFMapTypeRhash`
 
 This will set the `delegate_maps` bpffs mount option.
 
@@ -4330,7 +4338,7 @@ Accepts a list of BPF attach points to allow or " `any`" to allow everything.
 Defaults to none. The accepted values are:
 
 
-`BPFCgroupInetIngress` `BPFCgroupInetEgress` `BPFCgroupInetSockCreate` `BPFCgroupSockOps` `BPFSkSkbStreamParser` `BPFSkSkbStreamVerdict` `BPFCgroupDevice` `BPFSkMsgVerdict` `BPFCgroupInet4Bind` `BPFCgroupInet6Bind` `BPFCgroupInet4Connect` `BPFCgroupInet6Connect` `BPFCgroupInet4PostBind` `BPFCgroupInet6PostBind` `BPFCgroupUdp4Sendmsg` `BPFCgroupUdp6Sendmsg` `BPFLircMode2` `BPFFlowDissector` `BPFCgroupSysctl` `BPFCgroupUdp4Recvmsg` `BPFCgroupUdp6Recvmsg` `BPFCgroupGetsockopt` `BPFCgroupSetsockopt` `BPFTraceRawTp` `BPFTraceFentry` `BPFTraceFexit` `BPFModifyReturn` `BPFLsmMac` `BPFTraceIter` `BPFCgroupInet4Getpeername` `BPFCgroupInet6Getpeername` `BPFCgroupInet4Getsockname` `BPFCgroupInet6Getsockname` `BPFXdpDevmap` `BPFCgroupInetSockRelease` `BPFXdpCpumap` `BPFSkLookup` `BPFXdp` `BPFSkSkbVerdict` `BPFSkReuseportSelect` `BPFSkReuseportSelectOrMigrate` `BPFPerfEvent` `BPFTraceKprobeMulti` `BPFLsmCgroup` `BPFStructOps` `BPFNetfilter` `BPFTcxIngress` `BPFTcxEgress` `BPFTraceUprobeMulti` `BPFCgroupUnixConnect` `BPFCgroupUnixSendmsg` `BPFCgroupUnixRecvmsg` `BPFCgroupUnixGetpeername` `BPFCgroupUnixGetsockname` `BPFNetkitPrimary` `BPFNetkitPeer` `BPFTraceKprobeSession` `BPFTraceUprobeSession` `BPFTraceFsession`
+`BPFCgroupInetIngress` `BPFCgroupInetEgress` `BPFCgroupInetSockCreate` `BPFCgroupSockOps` `BPFSkSkbStreamParser` `BPFSkSkbStreamVerdict` `BPFCgroupDevice` `BPFSkMsgVerdict` `BPFCgroupInet4Bind` `BPFCgroupInet6Bind` `BPFCgroupInet4Connect` `BPFCgroupInet6Connect` `BPFCgroupInet4PostBind` `BPFCgroupInet6PostBind` `BPFCgroupUdp4Sendmsg` `BPFCgroupUdp6Sendmsg` `BPFLircMode2` `BPFFlowDissector` `BPFCgroupSysctl` `BPFCgroupUdp4Recvmsg` `BPFCgroupUdp6Recvmsg` `BPFCgroupGetsockopt` `BPFCgroupSetsockopt` `BPFTraceRawTp` `BPFTraceFentry` `BPFTraceFexit` `BPFModifyReturn` `BPFLsmMac` `BPFTraceIter` `BPFCgroupInet4Getpeername` `BPFCgroupInet6Getpeername` `BPFCgroupInet4Getsockname` `BPFCgroupInet6Getsockname` `BPFXdpDevmap` `BPFCgroupInetSockRelease` `BPFXdpCpumap` `BPFSkLookup` `BPFXdp` `BPFSkSkbVerdict` `BPFSkReuseportSelect` `BPFSkReuseportSelectOrMigrate` `BPFPerfEvent` `BPFTraceKprobeMulti` `BPFLsmCgroup` `BPFStructOps` `BPFNetfilter` `BPFTcxIngress` `BPFTcxEgress` `BPFTraceUprobeMulti` `BPFCgroupUnixConnect` `BPFCgroupUnixSendmsg` `BPFCgroupUnixRecvmsg` `BPFCgroupUnixGetpeername` `BPFCgroupUnixGetsockname` `BPFNetkitPrimary` `BPFNetkitPeer` `BPFTraceKprobeSession` `BPFTraceUprobeSession` `BPFTraceFsession` `BPFTraceFentryMulti` `BPFTraceFexitMulti` `BPFTraceFsessionMulti`
 
 This will set the `delegate_attachs` bpffs mount option.
 
@@ -4406,6 +4414,11 @@ is enabled.
 In other cases, this setting defaults to the value set with `DefaultRestrictSUIDSGID=` in
 [systemd-system.conf(5)](systemd-system.conf.html#), which
 defaults to off.
+
+This setting is implemented using seccomp filtering. For system calls where the mode bits are
+passed directly as arguments, the call is denied only when the SUID or SGID bits are set. For system
+calls where those bits are passed indirectly and cannot be inspected by the filter, such as
+`openat2()`, the call is blocked entirely, regardless of the requested mode.
 
 Added in version 242.
 
@@ -4792,7 +4805,9 @@ executed processes is compiled. That means it may undo assignments from any conf
 assignments made through `Environment=` or `EnvironmentFile=`, inherited from
 the system manager's global set of environment variables, inherited via `PassEnvironment=`,
 set by the service manager itself (such as `$NOTIFY_SOCKET` and such), or set by a PAM module
-(in case `PAMName=` is used).
+(in case `PAMName=` is used). Note that variable expansion in the command lines of
+`ExecStart=` and friends is not affected by this option, as it happens before the
+unsetting is applied.
 
 See "Environment Variables in Spawned Processes" below for a description of how those
 settings combine to form the inherited environment. See [environ(7)](https://man7.org/linux/man-pages/man7/environ.7.html) for general
@@ -4833,7 +4848,9 @@ The `file:path` option may be used to connect a specific file
 system object to standard input. An absolute path following the " `:`" character is expected,
 which may refer to a regular file, a FIFO or special file. If an `AF_UNIX` socket in the
 file system is specified, a stream socket is connected to it. The latter is useful for connecting standard
-input of processes to arbitrary system services.
+input of processes to arbitrary system services. Note that the file system object is opened by the
+service manager before the executable is invoked; see the note on the security context this
+happens in for `StandardOutput=` below.
 
 The `socket` option is valid in socket-activated services only, and requires the relevant
 socket unit file (see
@@ -4924,6 +4941,14 @@ with `NUL` bytes, producing a sparse file. Thus,
 only one process runs at a time, such as services with a single `ExecStart=` and no
 `ExecStartPost=`, `ExecReload=`, `ExecStop=` or
 similar.
+
+Note that for `file:path`,
+`append:path` and
+`truncate:path` of `StandardOutput=`,
+`StandardError=` or `StandardInput=`, the target path is opened
+by the service manager before the executable is invoked — and hence before
+`SELinuxContext=` or any policy-defined transition takes effect. The resulting
+descriptor is then inherited across that transition into the unit's own domain.
 
 `socket` connects standard output to a socket acquired via socket activation. The
 semantics are similar to the same option of `StandardInput=`, see above.

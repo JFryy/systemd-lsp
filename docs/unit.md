@@ -777,7 +777,9 @@ effect of powering down the system, executing kexec, and halting the system resp
 semantics. `exit` causes the manager to exit following the normal shutdown procedure,
 and `exit-force` causes it terminate without shutting down services. When
 `exit` or `exit-force` is used by default the exit status of the main
-process of the unit (if this applies) is returned from the service manager. However, this may be
+process of the unit (if this applies) is returned from the service manager. If there is no such
+status, `FailureAction=` returns 255 instead, while
+`SuccessAction=` leaves the exit status unchanged. However, this may be
 overridden with
 `FailureActionExitStatus=`/ `SuccessActionExitStatus=`, see below.
 `soft-reboot` will trigger a userspace reboot operation.
@@ -823,7 +825,9 @@ effect of powering down the system, executing kexec, and halting the system resp
 semantics. `exit` causes the manager to exit following the normal shutdown procedure,
 and `exit-force` causes it terminate without shutting down services. When
 `exit` or `exit-force` is used by default the exit status of the main
-process of the unit (if this applies) is returned from the service manager. However, this may be
+process of the unit (if this applies) is returned from the service manager. If there is no such
+status, `FailureAction=` returns 255 instead, while
+`SuccessAction=` leaves the exit status unchanged. However, this may be
 overridden with
 `FailureActionExitStatus=`/ `SuccessActionExitStatus=`, see below.
 `soft-reboot` will trigger a userspace reboot operation.
@@ -1391,8 +1395,10 @@ Added in version 244.
 
 ### ConditionPathExists=
 
-Check for the existence of a file. If the specified absolute path name does not exist,
-the condition will fail. If the absolute path name passed to
+Check for the existence of a path. This applies to any file system object (such as a
+regular file, directory, device node, FIFO, or socket), not only regular files. Symbolic links
+are followed, so a broken symbolic link is not considered to exist. If the specified absolute
+path name does not exist, the condition will fail. If the absolute path name passed to
 `ConditionPathExists=` is prefixed with an exclamation mark
 (" `!`"), the test is negated, and the unit is only started if the path does not
 exist.
@@ -1553,11 +1559,10 @@ Added in version 244.
 
 ### ConditionCPUFeature=
 
-Verify that a given CPU feature is available via the " `CPUID`"
-instruction. This condition only does something on i386 and x86-64 processors. On other
-processors it is assumed that the CPU does not support the given feature. It checks the leaves
-" `1`", " `7`", " `0x80000001`", and
-" `0x80000007`". Valid values are:
+On i386 and x86-64, verify that a given CPU feature is available via the
+" `CPUID`" instruction. It checks the leaves " `1`",
+" `7`", " `0x80000001`", and " `0x80000007`". Valid
+values are:
 " `fpu`",
 " `vme`",
 " `de`",
@@ -1610,6 +1615,27 @@ processors it is assumed that the CPU does not support the given feature. It che
 " `abm`",
 " `constant_tsc`".
 
+On arm64, valid values are the corresponding arm64 feature names,
+such as
+" `asimd`",
+" `paca`",
+" `pacg`",
+" `bti`",
+" `mte`",
+among others. For the full list, see the documentation on
+[ARM64 ELF hwcaps](https://docs.kernel.org/arch/arm64/elf_hwcaps.html).
+
+To avoid ambiguities in mixed-architecture fleets, the value can be prefixed
+with the architecture name using the form " `ARCH.FEATURE`". If the
+architecture prefix does not match the running system, the condition evaluates
+to false. For example, one can specify " `arm64.bti`" on arm64
+systems to check if " `bti`" is supported. In this example,
+" `ConditionCPUFeature=arm64.bti`" and
+" `ConditionCPUFeature=bti`" are functionally equivalent.
+See `ConditionArchitecture=` for valid architecture names.
+
+On architectures other than x86 and arm64, it is assumed that the CPU does not support the given feature.
+
 Added in version 248.
 
 ### ConditionOSRelease=
@@ -1641,6 +1667,17 @@ shell-style globbing (" `*`", " `?`", " `[]`"). The
 condition is satisfied if at least one of the configured tags matches the pattern. The test may be
 negated by prepending an exclamation mark, in which case it is satisfied if none of the configured
 tags matches.
+
+Tags may be parameterized with a value in the form
+" `key=value`"; the
+" `=`" and the value are part of the tag and thus part of the string the pattern is
+matched against. Hence " `ConditionMachineTag=role=webserver`" matches the tag
+" `role=webserver`" exactly, " `ConditionMachineTag=role=*`" matches any
+value assigned to the " `role`" key, and " `ConditionMachineTag=role`"
+(without " `=`") does _not_ match " `role=webserver`".
+See
+[machine-info(5)](machine-info.html#)
+for the precise syntax of machine tags.
 
 Added in version 261.
 
