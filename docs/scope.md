@@ -3,10 +3,10 @@
 Scope units are not configured via unit configuration files,
 but are only created programmatically using the bus interfaces of
 systemd. They are named similar to filenames. A unit whose name
-ends in " `.scope`" refers to a scope unit. Scopes
+ends in " `.scope`" refers to a scope unit. Scope
 units manage a set of system processes. Unlike service units, scope
 units manage externally created processes, and do not fork off
-processes on its own.
+processes on their own.
 
 The main purpose of scope units is grouping worker processes
 of a system service for organization and for managing resources.

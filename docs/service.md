@@ -139,6 +139,27 @@ command for reloading of the service's configuration.
 
 The signal to send can be tweaked via `ReloadSignal=`, see below.
 
+For `notify-reload` services, systemd verifies that the service's main process
+has actually installed a handler for the configured reload signal (by default
+`SIGHUP`). This verification checks for both traditional signal handlers (via
+[sigaction(2)](https://man7.org/linux/man-pages/man2/sigaction.2.html))
+and blocked signals that are typically handled via
+[signalfd(2)](https://man7.org/linux/man-pages/man2/signalfd.2.html).
+This verification is performed at two points:
+
+
+
+1. When the service first sends " `READY=1`" during initial startup. If no
+    signal handler is detected at this point, the service startup is aborted.
+
+2. Immediately before sending the reload signal. If the handler is no longer present,
+    systemd logs a warning but the reload signal is still sent.
+
+
+This prevents accidentally starting services that lack the required signal handler. Services
+using `notify-reload` must install their reload signal handler before sending the
+initial " `READY=1`" notification.
+
 - Behavior of `idle` is very similar to `simple`; however,
 actual execution of the service program is delayed until all active jobs are dispatched. This may be used
 to avoid interleaving of output of shell services with the status output on the console. Note that this
@@ -521,6 +542,21 @@ This setting is effective only if `RestartSteps=` is also set and
 `RestartSec=` is not zero.
 
 Added in version 254.
+
+### RestartRandomizedDelaySec=
+
+Delay automatic restarts by a randomly selected, evenly distributed amount of time
+between 0 and the specified time value, added on top of the delay otherwise configured via
+`RestartSec=` (and `RestartSteps=`/ `RestartMaxDelaySec=`,
+if used). Takes a value in the same format as `RestartSec=`. Defaults to 0, indicating
+that no randomized delay shall be applied.
+
+This setting is useful to stretch out the restarts of similarly configured service instances that
+fail at the same time, to prevent them from restarting simultaneously and possibly resulting in
+resource congestion. It is the restart-side analogue of `RandomizedDelaySec=` in
+[systemd.timer(5)](systemd.timer.html#).
+
+Added in version 262.
 
 ### TimeoutStartSec=
 
@@ -1078,6 +1114,40 @@ Use **systemctl clean --what=fdstore …** to release the file descriptor store
 explicitly.
 
 Added in version 254.
+
+### LUOSession=
+
+Takes a whitespace-separated list of names. For each name, when the service is
+started the service manager creates a LUO session via the [Live Update Orchestrator](https://docs.kernel.org/userspace-api/liveupdate.html) (LUO,
+i.e. `/dev/liveupdate`) and hands the resulting session file descriptor to the
+service through the file descriptor store, using the configured name as its
+" `FDNAME=`". The session is hence passed to the service's processes via
+[sd\_listen\_fds(3)](sd_listen_fds.html#),
+like any other file descriptor store entry. The service may then preserve additional file
+descriptors (such as [memfd\_create(2)](https://man7.org/linux/man-pages/man2/memfd_create.2.html)
+memory file descriptors) in the session, which survive a " `kexec`"-based reboot and
+can be retrieved again on the other side.
+
+A session is only handed out if one with the same name is not already present in the service's
+file descriptor store. This way a session handed out on first start, or restored across a
+" `kexec`", is reused on the next start rather than replaced. The kernel-level session
+name is derived deterministically from the unit name and the configured name, so that it remains
+stable and unique, and it fits within the length limit imposed by the kernel.
+
+This setting implies `FileDescriptorStoreMax=` is set to at least the number
+of configured sessions. To ensure the sessions are kept pinned and preserved across a
+" `kexec`", combine this with `FileDescriptorStorePreserve=yes` (see
+above). If `/dev/liveupdate` is not available no session is handed out, and the
+service is started normally. This setting may be specified more than once, in which case the lists
+are combined. If the empty string is assigned the list is reset and all prior assignments have no
+effect.
+
+For further information on the file descriptor store see the [File Descriptor Store](https://systemd.io/FILE_DESCRIPTOR_STORE) overview.
+
+This option is only available for system services and is not supported for services
+running in per-user instances of the service manager.
+
+Added in version 262.
 
 ### USBFunctionDescriptors=
 

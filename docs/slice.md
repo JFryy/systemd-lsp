@@ -94,3 +94,41 @@ structural units (i.e. slice units), if any are defined.
 
 Added in version 258.
 
+### ActivatingConcurrencyMax=
+
+Configures a limit on the maximum number of units assigned to this
+slice (or any descendent slices) that may be in the _activating_ state
+at the same time. Unlike `ConcurrencySoftMax=` which limits units in the
+_active_ state, this option limits units while they are starting up.
+Once a unit leaves the _activating_ state (whether to
+_active_, _failed_, or any other state), it no longer
+counts toward this limit, allowing the next queued unit to begin starting.
+
+This is particularly useful for managing the "thundering herd" problem during system
+boot, where many long-running services (such as container workloads) attempt to start
+simultaneously. By setting `ActivatingConcurrencyMax=`, you can pace the
+startup process to limit CPU and I/O pressure, while still allowing all services to
+eventually reach the _active_ state.
+
+When the limit is reached, further activation requests are queued and will be
+dispatched automatically once running activations complete. No error is returned to the
+caller. Note that if a unit becomes stuck in the activating state (for example, due to
+a hung process or missing dependency), it will continue to occupy a slot until it
+leaves that state. Configure appropriate timeouts (e.g.,
+`TimeoutStartSec=`) on individual units to prevent indefinite blocking.
+
+Setting `ActivatingConcurrencyMax=0` blocks all activation
+requests in the slice hierarchy indefinitely. Queued units will never start until
+the limit is raised. This can be used to intentionally freeze slice startup,
+matching the behavior of `ConcurrencySoftMax=0`.
+
+If the special value " `infinity`" is specified, no concurrency limit
+is enforced. This is the default.
+
+Note that this option has a hierarchical effect: a limit set for a slice unit will
+apply to both the units immediately within the slice and all units further down the slice
+tree. Note that slice units themselves never enter the activating state, so nested slices
+do not count toward the limit.
+
+Added in version 262.
+
