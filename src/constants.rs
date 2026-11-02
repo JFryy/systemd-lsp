@@ -364,7 +364,42 @@ impl SystemdConstants {
         }
     }
 
+    // Editor features (completion, hover, definition) accept miscased names through the
+    // lookups below. Diagnostics match exactly, as systemd does, so a miscased name is
+    // still reported.
+
+    /// Canonical spelling of a known section name, matched case-insensitively.
+    pub fn canonical_section(section: &str) -> Option<&'static str> {
+        find_key_ignore_case(Self::section_directives(), section)
+    }
+
+    /// Canonical spelling of a directive, matched case-insensitively within `section`
+    /// and then against directives with globally known values.
+    pub fn canonical_directive(section: &str, directive: &str) -> Option<&'static str> {
+        Self::canonical_section(section)
+            .and_then(|section| Self::section_directives().get(section))
+            .and_then(|directives| {
+                directives
+                    .iter()
+                    .find(|entry| entry.eq_ignore_ascii_case(directive))
+                    .copied()
+            })
+            .or_else(|| find_key_ignore_case(Self::valid_values(), directive))
+    }
+
+    /// Markdown documentation for a section, matched case-insensitively.
+    pub fn section_documentation_for(section: &str) -> Option<&'static str> {
+        let docs = Self::section_documentation();
+        find_key_ignore_case(docs, section).map(|key| docs[key])
+    }
+
     pub const APP_NAME: &'static str = "systemdls";
+}
+
+fn find_key_ignore_case<V>(map: &HashMap<&'static str, V>, name: &str) -> Option<&'static str> {
+    map.keys()
+        .find(|key| key.eq_ignore_ascii_case(name))
+        .copied()
 }
 
 #[cfg(test)]
@@ -559,5 +594,25 @@ mod tests {
         assert!(protect_home.contains(&"tmpfs"));
         assert!(protect_home.contains(&"yes"));
         assert!(protect_home.contains(&"no"));
+    }
+
+    #[test]
+    fn test_case_insensitive_lookups() {
+        assert_eq!(
+            SystemdConstants::canonical_section("sERVICE"),
+            Some("Service")
+        );
+        assert_eq!(SystemdConstants::canonical_section("Bogus"), None);
+        assert_eq!(
+            SystemdConstants::canonical_directive("service", "restart"),
+            Some("Restart")
+        );
+        assert_eq!(SystemdConstants::canonical_directive("Unit", "Bogus"), None);
+        assert_eq!(
+            SystemdConstants::section_documentation_for("unit"),
+            SystemdConstants::section_documentation()
+                .get("Unit")
+                .copied()
+        );
     }
 }

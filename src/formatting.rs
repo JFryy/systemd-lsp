@@ -1,3 +1,4 @@
+use crate::parser::lsp_u32;
 use log::{debug, trace};
 use tower_lsp_server::ls_types::{Position, Range, TextEdit, Uri};
 
@@ -18,16 +19,10 @@ impl SystemdFormatter {
         // If content changed, replace the entire document
         if formatted_content != text {
             vec![TextEdit {
-                range: Range {
-                    start: Position {
-                        line: 0,
-                        character: 0,
-                    },
-                    end: Position {
-                        line: text.lines().count() as u32,
-                        character: 0,
-                    },
-                },
+                range: Range::new(
+                    Position::new(0, 0),
+                    Position::new(lsp_u32(text.lines().count()), 0),
+                ),
                 new_text: formatted_content,
             }]
         } else {

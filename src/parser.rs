@@ -33,9 +33,14 @@ impl SystemdSection {
     }
 }
 
+/// Converts a line or column count to an LSP `u32`, saturating at `u32::MAX`.
+pub(crate) fn lsp_u32(count: usize) -> u32 {
+    u32::try_from(count).unwrap_or(u32::MAX)
+}
+
 /// Number of UTF-16 code units in `text`, the column unit LSP positions use by default.
 pub fn utf16_len(text: &str) -> u32 {
-    text.encode_utf16().count() as u32
+    lsp_u32(text.encode_utf16().count())
 }
 
 /// Byte index in `line` for a UTF-16 column, clamped to the line end and to char boundaries.
@@ -84,8 +89,8 @@ impl Default for SystemdParser {
     fn default() -> Self {
         Self {
             documents: DashMap::new(),
-            section_regex: Regex::new(r"^\[([^\]]+)\]$").unwrap(),
-            directive_regex: Regex::new(r"^([^=]+)=(.*)$").unwrap(),
+            section_regex: Regex::new(r"^\[([^\]]+)\]$").expect("section pattern is valid"),
+            directive_regex: Regex::new(r"^([^=]+)=(.*)$").expect("directive pattern is valid"),
         }
     }
 }
@@ -103,7 +108,7 @@ impl SystemdParser {
         let mut lines = text.lines().enumerate().peekable();
 
         while let Some((raw_line_num, line)) = lines.next() {
-            let line_num = raw_line_num as u32;
+            let line_num = lsp_u32(raw_line_num);
             let trimmed = line.trim();
 
             if trimmed.is_empty() || trimmed.starts_with('#') {
@@ -165,7 +170,7 @@ impl SystemdParser {
                     while continuation {
                         if let Some((next_line_num, next_line)) = lines.next() {
                             let next_line_trimmed = next_line.trim();
-                            end_line_number = next_line_num as u32;
+                            end_line_number = lsp_u32(next_line_num);
 
                             let indent_byte = next_line.find(next_line_trimmed).unwrap_or(0);
                             let indent = utf16_len(&next_line[..indent_byte]);
@@ -238,7 +243,7 @@ impl SystemdParser {
                 .get_mut(&section_name)
                 .and_then(|section| section.line_ranges.last_mut())
             {
-                range.1 = text.lines().count() as u32;
+                range.1 = lsp_u32(text.lines().count());
             }
         }
 

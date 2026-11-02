@@ -195,8 +195,8 @@ impl LanguageServer for SystemdLanguageServer {
         let uri = &params.text_document.uri;
         debug!("Formatting request for {:?}", uri);
 
-        if let Some(document_text) = self.parser.get_document_text(uri) {
-            let edits = self.formatter.format_document(uri, &document_text);
+        if let Some(unit) = self.parser.get_parsed_document(uri) {
+            let edits = self.formatter.format_document(uri, &unit.raw_text);
             debug!("Generated {} formatting edits", edits.len());
             Ok(Some(edits))
         } else {
@@ -213,8 +213,8 @@ impl LanguageServer for SystemdLanguageServer {
         let range = &params.range;
         debug!("Range formatting request for {:?} at {:?}", uri, range);
 
-        if let Some(document_text) = self.parser.get_document_text(uri) {
-            let edits = self.formatter.format_range(uri, &document_text, *range);
+        if let Some(unit) = self.parser.get_parsed_document(uri) {
+            let edits = self.formatter.format_range(uri, &unit.raw_text, *range);
             debug!("Generated {} range formatting edits", edits.len());
             Ok(Some(edits))
         } else {
@@ -306,67 +306,45 @@ impl SystemdLanguageServer {
         );
         let parsed = self.parser.get_parsed_document(uri)?;
 
-        // Check if hovering over a section header specifically
         if let Some(section_name) = self
             .parser
             .get_section_header_at_position(&parsed, position)
         {
-            // Use the full embedded documentation for section headers
-            let section_key = section_name.to_lowercase();
-            if let Some(full_docs) = self
+            if let Some(docs) = self
                 .definition_provider
-                .get_embedded_documentation(&section_key)
+                .get_embedded_documentation(&section_name)
             {
-                return Some(Hover {
-                    contents: HoverContents::Markup(MarkupContent {
-                        kind: MarkupKind::Markdown,
-                        value: Self::truncate_documentation(full_docs),
-                    }),
-                    range: None,
-                });
-            }
-
-            // Fallback to short documentation if embedded docs not available
-            let section_docs = self.get_section_documentation(&section_name);
-            if let Some(docs) = section_docs {
-                return Some(Hover {
-                    contents: HoverContents::Markup(MarkupContent {
-                        kind: MarkupKind::Markdown,
-                        value: Self::truncate_documentation(&docs),
-                    }),
-                    range: None,
-                });
+                return Some(Self::markdown_hover(Self::truncate_documentation(docs)));
             }
         }
 
-        // Check if hovering over a directive
         if let Some(directive_name) = self.parser.get_word_at_position(&parsed, position) {
             let current_section = self.parser.get_section_at_line(&parsed, position.line)?;
-            let directive_docs =
-                self.get_directive_documentation(&directive_name, &current_section.name);
-            if let Some(docs) = directive_docs {
-                return Some(Hover {
-                    contents: HoverContents::Markup(MarkupContent {
-                        kind: MarkupKind::Markdown,
-                        value: Self::truncate_documentation(&docs),
-                    }),
-                    range: None,
-                });
+            if let Some(docs) = self
+                .completion
+                .get_directive_documentation(&directive_name, &current_section.name)
+            {
+                return Some(Self::markdown_hover(Self::truncate_documentation(&docs)));
             }
         }
 
-        // Fallback - provide generic help if hovering over any recognized line
-        if let Some(section) = self.parser.get_section_at_line(&parsed, position.line) {
-            return Some(Hover {
-                contents: HoverContents::Markup(MarkupContent {
-                    kind: MarkupKind::Markdown,
-                    value: format!("**systemd {} configuration**\n\nHover over section headers `[{}]` or directive names for detailed documentation.", section.name.to_lowercase(), section.name),
-                }),
-                range: None,
-            });
-        }
+        // Generic help for any other line inside a section
+        let section = self.parser.get_section_at_line(&parsed, position.line)?;
+        Some(Self::markdown_hover(format!(
+            "**systemd {} configuration**\n\nHover over section headers `[{}]` or directive names for detailed documentation.",
+            section.name.to_lowercase(),
+            section.name
+        )))
+    }
 
-        None
+    fn markdown_hover(value: String) -> Hover {
+        Hover {
+            contents: HoverContents::Markup(MarkupContent {
+                kind: MarkupKind::Markdown,
+                value,
+            }),
+            range: None,
+        }
     }
 
     /// Truncate documentation to a reasonable size for hover display
@@ -374,20 +352,19 @@ impl SystemdLanguageServer {
         const MAX_LINES: usize = 50;
         const MAX_CHARS: usize = 4000;
 
-        let lines: Vec<&str> = docs.lines().collect();
-
-        // Check if truncation is needed
-        if lines.len() <= MAX_LINES && docs.len() <= MAX_CHARS {
+        let mut lines = docs.lines();
+        let head: Vec<&str> = lines.by_ref().take(MAX_LINES).collect();
+        if lines.next().is_none() && docs.len() <= MAX_CHARS {
             return docs.to_string();
         }
 
-        // Truncate by lines first
-        let truncated_lines: Vec<&str> = lines.iter().take(MAX_LINES).copied().collect();
-        let mut result = truncated_lines.join("\n");
-
-        // Then truncate by characters if still too long
+        let mut result = head.join("\n");
         if result.len() > MAX_CHARS {
-            result.truncate(MAX_CHARS);
+            let mut end = MAX_CHARS;
+            while !result.is_char_boundary(end) {
+                end -= 1;
+            }
+            result.truncate(end);
             // Try to truncate at a word boundary
             if let Some(last_space) = result.rfind(' ') {
                 result.truncate(last_space);
@@ -399,19 +376,6 @@ impl SystemdLanguageServer {
             "\n\n---\n*Documentation truncated. Use 'Go to Definition' for full details.*",
         );
         result
-    }
-
-    fn get_section_documentation(&self, section_name: &str) -> Option<String> {
-        self.completion.get_section_documentation(section_name)
-    }
-
-    fn get_directive_documentation(
-        &self,
-        directive_name: &str,
-        section_name: &str,
-    ) -> Option<String> {
-        self.completion
-            .get_directive_documentation(directive_name, section_name)
     }
 }
 
@@ -762,6 +726,22 @@ mod tests {
             docs.is_some(),
             "Should have embedded documentation for unit section"
         );
+    }
+
+    #[test]
+    fn test_truncate_documentation_respects_char_boundaries() {
+        // 3-byte characters put byte 4000 in the middle of a character.
+        let docs = "\u{2192}".repeat(2000);
+        let truncated = SystemdLanguageServer::truncate_documentation(&docs);
+        assert!(truncated.starts_with('\u{2192}'));
+        assert!(truncated.ends_with("for full details.*"));
+
+        let short = "line\n".repeat(10);
+        assert_eq!(SystemdLanguageServer::truncate_documentation(&short), short);
+
+        let long = "line\n".repeat(60);
+        let truncated = SystemdLanguageServer::truncate_documentation(&long);
+        assert_eq!(truncated.matches("line").count(), 50);
     }
 
     #[test]

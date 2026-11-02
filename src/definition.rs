@@ -80,19 +80,11 @@ impl SystemdDefinitionProvider {
         None
     }
 
-    /// Section documentation, matched case-insensitively.
-    fn find_section_documentation(section_name: &str) -> Option<&'static str> {
-        SystemdConstants::section_documentation()
-            .iter()
-            .find(|(key, _)| key.eq_ignore_ascii_case(section_name))
-            .map(|(_, &content)| content)
-    }
-
     fn get_section_man_page_definition(
         &self,
         section_name: &str,
     ) -> Option<GotoDefinitionResponse> {
-        let content = Self::find_section_documentation(section_name);
+        let content = SystemdConstants::section_documentation_for(section_name);
 
         // Update the shared temp file with the requested section's documentation
         if let Some(temp_file) = &self.shared_temp_file {
@@ -116,7 +108,7 @@ impl SystemdDefinitionProvider {
 
     /// Get embedded documentation for a section
     pub fn get_embedded_documentation(&self, section_key: &str) -> Option<&'static str> {
-        Self::find_section_documentation(section_key)
+        SystemdConstants::section_documentation_for(section_key)
     }
 
     /// Clean up temporary documentation files

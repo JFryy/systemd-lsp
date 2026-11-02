@@ -223,28 +223,11 @@ impl SystemdCompletion {
         section_name: &str,
         directive_name: &str,
     ) -> Option<Vec<CompletionItem>> {
-        let section_map = SystemdConstants::section_directives();
-        let canonical_section = section_map
-            .keys()
-            .find(|name| name.eq_ignore_ascii_case(section_name))
-            .copied()
-            .unwrap_or(section_name);
-
-        let canonical_directive = section_map
-            .get(canonical_section)
-            .and_then(|directives| {
-                directives
-                    .iter()
-                    .find(|entry| entry.eq_ignore_ascii_case(directive_name))
-                    .copied()
-            })
-            .or_else(|| {
-                SystemdConstants::valid_values()
-                    .keys()
-                    .find(|key| key.eq_ignore_ascii_case(directive_name))
-                    .copied()
-            })
-            .unwrap_or(directive_name);
+        let canonical_section =
+            SystemdConstants::canonical_section(section_name).unwrap_or(section_name);
+        let canonical_directive =
+            SystemdConstants::canonical_directive(section_name, directive_name)
+                .unwrap_or(directive_name);
 
         let values =
             SystemdConstants::valid_values_for_section(canonical_section, canonical_directive)?;
@@ -351,16 +334,10 @@ impl SystemdCompletion {
         }
 
         // First, try to find the directive in the section's own markdown file
-        let section_docs = SystemdConstants::section_documentation();
-        if let Some(section_key) = section_docs
-            .keys()
-            .find(|k| k.eq_ignore_ascii_case(section_name))
+        if let Some(result) = SystemdConstants::section_documentation_for(section_name)
+            .and_then(|content| search_in_markdown(content, directive_name))
         {
-            if let Some(markdown_content) = section_docs.get(section_key) {
-                if let Some(result) = search_in_markdown(markdown_content, directive_name) {
-                    return Some(result);
-                }
-            }
+            return Some(result);
         }
 
         // If not found in the section's own docs, search in shared documentation
@@ -477,16 +454,14 @@ impl SystemdCompletion {
     }
 
     pub fn get_section_documentation(&self, section_name: &str) -> Option<String> {
-        SystemdConstants::section_documentation()
-            .get(section_name)
-            .map(|description| {
-                format!(
-                    "**[{}] Section**\n\n{}\n\n**Reference:** systemd.{}.5",
-                    section_name,
-                    description,
-                    section_name.to_lowercase()
-                )
-            })
+        SystemdConstants::section_documentation_for(section_name).map(|description| {
+            format!(
+                "**[{}] Section**\n\n{}\n\n**Reference:** systemd.{}.5",
+                section_name,
+                description,
+                section_name.to_lowercase()
+            )
+        })
     }
 
     pub fn get_directive_documentation(

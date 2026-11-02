@@ -1,5 +1,5 @@
 use crate::constants::SystemdConstants;
-use crate::parser::{utf16_len, DirectiveValueSpan, SystemdSection, SystemdUnit};
+use crate::parser::{utf16_len, SystemdDirective, SystemdSection, SystemdUnit};
 use dashmap::DashMap;
 use log::{debug, trace};
 use std::collections::{HashMap, HashSet};
@@ -98,13 +98,14 @@ impl SystemdDiagnostics {
     fn validate_directive_value(
         &self,
         section: &SystemdSection,
-        directive: &crate::parser::SystemdDirective,
+        directive: &SystemdDirective,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
         if section.name == "Service" && directive.key == "ExecStart" && directive.value.is_empty() {
-            diagnostics.push(
-                self.create_value_diagnostic(directive, "ExecStart cannot be empty".to_string()),
-            );
+            diagnostics.push(Self::create_value_diagnostic(
+                directive,
+                "ExecStart cannot be empty".to_string(),
+            ));
             return;
         }
 
@@ -120,7 +121,7 @@ impl SystemdDiagnostics {
             };
 
             if !is_valid {
-                diagnostics.push(self.create_value_diagnostic(
+                diagnostics.push(Self::create_value_diagnostic(
                     directive,
                     format!(
                         "Invalid {} value '{}'. Valid values: {}",
@@ -133,33 +134,22 @@ impl SystemdDiagnostics {
         }
     }
 
-    fn create_value_diagnostic(
-        &self,
-        directive: &crate::parser::SystemdDirective,
-        message: String,
-    ) -> Diagnostic {
-        let value_start_span =
-            directive
-                .value_spans
-                .first()
-                .cloned()
-                .unwrap_or(DirectiveValueSpan {
-                    line: directive.line_number,
-                    start: directive.column_range.1 + 1,
-                    end: directive.column_range.1 + 1,
-                });
-
-        let value_end_span = directive
-            .value_spans
-            .last()
-            .cloned()
-            .unwrap_or(value_start_span.clone());
+    /// Error spanning the directive's value; an empty value is reported just after the `=`.
+    fn create_value_diagnostic(directive: &SystemdDirective, message: String) -> Diagnostic {
+        let range = match (directive.value_spans.first(), directive.value_spans.last()) {
+            (Some(first), Some(last)) => Range::new(
+                Position::new(first.line, first.start),
+                Position::new(last.line, last.end),
+            ),
+            _ => {
+                let after_equals =
+                    Position::new(directive.line_number, directive.column_range.1 + 1);
+                Range::new(after_equals, after_equals)
+            }
+        };
 
         Diagnostic {
-            range: Range::new(
-                Position::new(value_start_span.line, value_start_span.start),
-                Position::new(value_end_span.line, value_end_span.end),
-            ),
+            range,
             severity: Some(DiagnosticSeverity::ERROR),
             source: Some(SystemdConstants::APP_NAME.to_string()),
             message,
