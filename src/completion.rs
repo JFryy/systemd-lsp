@@ -35,17 +35,17 @@ impl SystemdCompletion {
         let mut section_completions = Vec::new();
         for (&name, &description) in SystemdConstants::section_documentation() {
             let documentation = Self::create_documentation(
-                &format!("[{}] Section", name),
+                &format!("[{name}] Section"),
                 description,
                 &format!("systemd.{}.5", name.to_lowercase()),
             );
 
             section_completions.push(Self::create_completion_item(
-                format!("[{}]", name),
+                format!("[{name}]"),
                 CompletionItemKind::MODULE,
                 format!("systemd {} section", name.to_lowercase()),
                 documentation,
-                Some(format!("[{}]", name)),
+                Some(format!("[{name}]")),
             ));
         }
 
@@ -89,7 +89,7 @@ impl SystemdCompletion {
         let document_text = unit.raw_text.as_str();
         let completion_context = Self::determine_context(parser, &unit, position);
 
-        debug!("Completion context: {:?}", completion_context);
+        debug!("Completion context: {completion_context:?}");
 
         match completion_context {
             CompletionContext::SectionHeader => {
@@ -113,14 +113,11 @@ impl SystemdCompletion {
             }
             CompletionContext::Directive(section_name) => {
                 // Only show directives for the current section
-                debug!(
-                    "Providing directive completions for section: {}",
-                    section_name
-                );
+                debug!("Providing directive completions for section: {section_name}");
                 if let Some(directives) = self.directive_completions.get(section_name) {
                     Some(CompletionResponse::Array(directives.clone()))
                 } else {
-                    debug!("No directives found for section: {}", section_name);
+                    debug!("No directives found for section: {section_name}");
                     Some(CompletionResponse::Array(Vec::new()))
                 }
             }
@@ -128,17 +125,11 @@ impl SystemdCompletion {
                 section: section_name,
                 directive,
             } => {
-                debug!(
-                    "Providing value completions for {}.{}",
-                    section_name, directive
-                );
+                debug!("Providing value completions for {section_name}.{directive}");
                 match Self::get_value_completions(section_name, directive) {
                     Some(items) if !items.is_empty() => Some(CompletionResponse::Array(items)),
                     _ => {
-                        debug!(
-                            "No value completions available for {}.{}",
-                            section_name, directive
-                        );
+                        debug!("No value completions available for {section_name}.{directive}");
                         None
                     }
                 }
@@ -249,10 +240,7 @@ impl SystemdCompletion {
     fn create_documentation(title: &str, description: &str, reference: &str) -> Documentation {
         Documentation::MarkupContent(MarkupContent {
             kind: MarkupKind::Markdown,
-            value: format!(
-                "**{}**\n\n{}\n\n---\n*Reference: {}*",
-                title, description, reference
-            ),
+            value: format!("**{title}**\n\n{description}\n\n---\n*Reference: {reference}*"),
         })
     }
 
@@ -294,7 +282,7 @@ impl SystemdCompletion {
     fn extract_directive_from_markdown(section_name: &str, directive_name: &str) -> Option<String> {
         // Helper function to search for a directive in a markdown string
         fn search_in_markdown(markdown_content: &str, directive_name: &str) -> Option<String> {
-            let directive_header = format!("### {}=", directive_name);
+            let directive_header = format!("### {directive_name}=");
             let directive_header_lower = directive_header.to_lowercase();
 
             let lines = markdown_content.lines();
@@ -360,7 +348,7 @@ impl SystemdCompletion {
             if let Some(markdown_doc) = Self::extract_directive_from_markdown(section, key) {
                 Documentation::MarkupContent(MarkupContent {
                     kind: MarkupKind::Markdown,
-                    value: format!("**{}**\n\n{}", key, markdown_doc),
+                    value: format!("**{key}**\n\n{markdown_doc}"),
                 })
             } else {
                 // Fall back to short description
@@ -372,7 +360,7 @@ impl SystemdCompletion {
             CompletionItemKind::PROPERTY,
             "systemd directive".to_string(),
             documentation,
-            Some(format!("{}=", key)),
+            Some(format!("{key}=")),
         )
     }
 
@@ -435,19 +423,19 @@ impl SystemdCompletion {
             if let Some(value_doc) = Self::extract_value_documentation(section, directive, value) {
                 Documentation::MarkupContent(MarkupContent {
                     kind: MarkupKind::Markdown,
-                    value: format!("**{}**\n\n{}", value, value_doc),
+                    value: format!("**{value}**\n\n{value_doc}"),
                 })
             } else {
                 Documentation::MarkupContent(MarkupContent {
                     kind: MarkupKind::Markdown,
-                    value: format!("Valid `{}` option for `{}`", value, directive),
+                    value: format!("Valid `{value}` option for `{directive}`"),
                 })
             };
 
         Self::create_completion_item(
             value.to_string(),
             CompletionItemKind::VALUE,
-            format!("{} value", directive),
+            format!("{directive} value"),
             documentation,
             Some(value.to_string()),
         )
@@ -628,8 +616,7 @@ mod tests {
 
             assert!(
                 duplicates.is_empty(),
-                "Found duplicate completion labels: {:?}",
-                duplicates
+                "Found duplicate completion labels: {duplicates:?}"
             );
         }
     }

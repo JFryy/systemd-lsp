@@ -11,7 +11,7 @@ impl SystemdFormatter {
     }
 
     pub fn format_document(&self, uri: &Uri, text: &str) -> Vec<TextEdit> {
-        debug!("Formatting document: {:?}", uri);
+        debug!("Formatting document: {uri:?}");
         trace!("Document text length: {}", text.len());
 
         let formatted_content = self.apply_opinionated_formatting(text);
@@ -31,7 +31,7 @@ impl SystemdFormatter {
     }
 
     pub fn format_range(&self, uri: &Uri, text: &str, _range: Range) -> Vec<TextEdit> {
-        debug!("Formatting range in document: {:?}", uri);
+        debug!("Formatting range in document: {uri:?}");
 
         // For range formatting, we'll format the entire document to maintain consistency
         // since our opinionated formatting affects spacing between sections
@@ -77,7 +77,7 @@ impl SystemdFormatter {
                 let value = trimmed[equals_pos + 1..].trim();
 
                 // Opinionated formatting: no spaces around equals
-                let formatted = format!("{}={}", key, value);
+                let formatted = format!("{key}={value}");
                 result.push(formatted);
                 previous_was_section = false;
                 continue;

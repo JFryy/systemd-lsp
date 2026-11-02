@@ -252,8 +252,7 @@ fn test_line_numbers_in_output() {
         // Each diagnostic line should have line:column format
         assert!(
             line.matches(':').count() >= 3,
-            "Diagnostic line should contain path:line:column:severity format. Got: {}",
-            line
+            "Diagnostic line should contain path:line:column:severity format. Got: {line}"
         );
     }
 }

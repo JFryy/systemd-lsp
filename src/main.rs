@@ -80,7 +80,7 @@ impl LanguageServer for SystemdLanguageServer {
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
         let uri = &params.text_document.uri;
-        info!("Document opened: {:?}", uri);
+        info!("Document opened: {uri:?}");
         debug!("Document language: {}", params.text_document.language_id);
         debug!("Document version: {}", params.text_document.version);
 
@@ -151,7 +151,7 @@ impl LanguageServer for SystemdLanguageServer {
             CompletionResponse::List(list) => list.items.len(),
         });
 
-        debug!("Returning {} completion items", count);
+        debug!("Returning {count} completion items");
         Ok(result)
     }
 
@@ -193,14 +193,14 @@ impl LanguageServer for SystemdLanguageServer {
 
     async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
         let uri = &params.text_document.uri;
-        debug!("Formatting request for {:?}", uri);
+        debug!("Formatting request for {uri:?}");
 
         if let Some(unit) = self.parser.get_parsed_document(uri) {
             let edits = self.formatter.format_document(uri, &unit.raw_text);
             debug!("Generated {} formatting edits", edits.len());
             Ok(Some(edits))
         } else {
-            debug!("Document not found for formatting: {:?}", uri);
+            debug!("Document not found for formatting: {uri:?}");
             Ok(None)
         }
     }
@@ -211,14 +211,14 @@ impl LanguageServer for SystemdLanguageServer {
     ) -> Result<Option<Vec<TextEdit>>> {
         let uri = &params.text_document.uri;
         let range = &params.range;
-        debug!("Range formatting request for {:?} at {:?}", uri, range);
+        debug!("Range formatting request for {uri:?} at {range:?}");
 
         if let Some(unit) = self.parser.get_parsed_document(uri) {
             let edits = self.formatter.format_range(uri, &unit.raw_text, *range);
             debug!("Generated {} range formatting edits", edits.len());
             Ok(Some(edits))
         } else {
-            debug!("Document not found for range formatting: {:?}", uri);
+            debug!("Document not found for range formatting: {uri:?}");
             Ok(None)
         }
     }
@@ -253,11 +253,11 @@ impl LanguageServer for SystemdLanguageServer {
         params: SemanticTokensParams,
     ) -> Result<Option<SemanticTokensResult>> {
         let uri = &params.text_document.uri;
-        debug!("Semantic tokens full request for {:?}", uri);
+        debug!("Semantic tokens full request for {uri:?}");
 
         let tokens = self.semantic_tokens.get_semantic_tokens(&self.parser, uri);
         let count = tokens.as_ref().map_or(0, |t| t.data.len());
-        debug!("Generated {} semantic tokens", count);
+        debug!("Generated {count} semantic tokens");
 
         Ok(tokens.map(SemanticTokensResult::Tokens))
     }
@@ -601,7 +601,7 @@ fn setup_logging() {
             _ => log::LevelFilter::Info,
         };
 
-        debug!("Environment log level setting: {}", log_level);
+        debug!("Environment log level setting: {log_level}");
 
         let mut builder = env_logger::Builder::new();
         builder
@@ -611,7 +611,7 @@ fn setup_logging() {
             .init();
 
         info!("systemdls starting as LSP server");
-        info!("Log level: {}", level_filter);
+        info!("Log level: {level_filter}");
     }
 }
 
@@ -627,7 +627,7 @@ async fn main() {
         match run_cli_diagnostics(cli.paths, cli.recursive) {
             Ok(exit_code) => std::process::exit(exit_code),
             Err(e) => {
-                eprintln!("Error: {}", e);
+                eprintln!("Error: {e}");
                 std::process::exit(1);
             }
         }

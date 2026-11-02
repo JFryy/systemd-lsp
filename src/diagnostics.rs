@@ -42,7 +42,7 @@ impl SystemdDiagnostics {
     }
 
     pub fn update(&self, uri: &Uri, unit: &SystemdUnit) {
-        trace!("Updating diagnostics for {:?}", uri);
+        trace!("Updating diagnostics for {uri:?}");
         let diagnostics = self.diagnose(unit);
         debug!("Generated {} diagnostics for {:?}", diagnostics.len(), uri);
         self.diagnostics.insert(uri.clone(), diagnostics);

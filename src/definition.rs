@@ -68,7 +68,7 @@ impl SystemdDefinitionProvider {
 
         // Only handle section headers for go-to definition
         if let Some(section_name) = parser.get_section_header_at_position(&parsed, position) {
-            debug!("Found section header '{}' at position", section_name);
+            debug!("Found section header '{section_name}' at position");
             return self.get_section_man_page_definition(&section_name);
         } else {
             debug!(
@@ -90,10 +90,7 @@ impl SystemdDefinitionProvider {
         if let Some(temp_file) = &self.shared_temp_file {
             if let Some(content) = content {
                 if std::fs::write(temp_file, content).is_ok() {
-                    debug!(
-                        "Updated shared temp file with {} documentation",
-                        section_name
-                    );
+                    debug!("Updated shared temp file with {section_name} documentation");
                     if let Some(uri) = Uri::from_file_path(temp_file) {
                         let location = Location::new(uri, Range::default());
                         return Some(GotoDefinitionResponse::Scalar(location));
@@ -102,7 +99,7 @@ impl SystemdDefinitionProvider {
             }
         }
 
-        debug!("No documentation available for section: {}", section_name);
+        debug!("No documentation available for section: {section_name}");
         None
     }
 
@@ -116,7 +113,7 @@ impl SystemdDefinitionProvider {
         if let Some(temp_file) = &self.shared_temp_file {
             if temp_file.exists() {
                 if let Err(e) = std::fs::remove_file(temp_file) {
-                    debug!("Failed to remove shared temp file: {}", e);
+                    debug!("Failed to remove shared temp file: {e}");
                 } else {
                     debug!("Cleaned up shared temp file");
                 }
@@ -151,11 +148,10 @@ mod tests {
         ];
 
         for section in expected_sections {
-            assert!(docs.contains_key(section), "{} should exist", section);
+            assert!(docs.contains_key(section), "{section} should exist");
             assert!(
                 !docs[section].is_empty(),
-                "{} docs should not be empty",
-                section
+                "{section} docs should not be empty"
             );
         }
     }
@@ -216,17 +212,14 @@ mod tests {
         let test_cases = ["[UNIT]", "[Unit]", "[unit]"];
 
         for (i, section_header) in test_cases.iter().enumerate() {
-            let content = format!("{}\nDescription=Test\n", section_header);
-            let uri = format!("file:///test_{}.service", i)
-                .parse::<Uri>()
-                .unwrap();
+            let content = format!("{section_header}\nDescription=Test\n");
+            let uri = format!("file:///test_{i}.service").parse::<Uri>().unwrap();
             parser.update_document(&uri, &content);
 
             let result = provider.get_definition(&parser, &uri, &Position::new(0, 0));
             assert!(
                 result.is_some(),
-                "Failed for section header: {}",
-                section_header
+                "Failed for section header: {section_header}"
             );
         }
     }
