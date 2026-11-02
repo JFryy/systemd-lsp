@@ -3,7 +3,7 @@ use crate::parser::{utf16_len, DirectiveValueSpan, SystemdSection, SystemdUnit};
 use dashmap::DashMap;
 use log::{debug, trace};
 use std::collections::HashSet;
-use tower_lsp_server::lsp_types::{Diagnostic, DiagnosticSeverity, Position, Range, Uri};
+use tower_lsp_server::ls_types::{Diagnostic, DiagnosticSeverity, Position, Range, Uri};
 
 #[derive(Debug)]
 pub struct SystemdDiagnostics {
@@ -180,7 +180,7 @@ mod tests {
     use super::*;
     use crate::parser::{DirectiveValueSpan, SystemdDirective, SystemdSection};
     use std::collections::HashMap;
-    use tower_lsp_server::lsp_types::{DiagnosticSeverity, Uri};
+    use tower_lsp_server::ls_types::{DiagnosticSeverity, Uri};
 
     fn create_test_unit(sections: Vec<(&str, Vec<(&str, &str)>)>) -> SystemdUnit {
         let mut unit_sections = HashMap::new();

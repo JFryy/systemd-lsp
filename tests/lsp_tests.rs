@@ -1,5 +1,5 @@
 use systemd_lsp::{SystemdCompletion, SystemdConstants, SystemdDefinitionProvider, SystemdParser};
-use tower_lsp_server::lsp_types::{Position, Uri};
+use tower_lsp_server::ls_types::{Position, Uri};
 
 fn parse_document(content: &str) -> (SystemdParser, Uri) {
     let parser = SystemdParser::new();

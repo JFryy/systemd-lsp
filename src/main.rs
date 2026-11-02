@@ -4,7 +4,7 @@ use std::env;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use tower_lsp_server::jsonrpc::Result;
-use tower_lsp_server::lsp_types::*;
+use tower_lsp_server::ls_types::*;
 use tower_lsp_server::{Client, LanguageServer, LspService, Server};
 
 mod completion;

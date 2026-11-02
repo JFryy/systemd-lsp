@@ -3,7 +3,7 @@ use log::{debug, trace};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tower_lsp_server::lsp_types::{Position, Uri};
+use tower_lsp_server::ls_types::{Position, Uri};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemdUnit {
@@ -365,7 +365,7 @@ fn parse_value_fragment(text: &str) -> (String, bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tower_lsp_server::lsp_types::{Position, Uri};
+    use tower_lsp_server::ls_types::{Position, Uri};
 
     #[test]
     fn test_parse_basic_systemd_file() {
