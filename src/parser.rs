@@ -3,6 +3,7 @@ use log::{debug, trace};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
 use tower_lsp_server::ls_types::{Position, Uri};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -32,9 +33,14 @@ impl SystemdSection {
     }
 }
 
+/// Converts a line or column count to an LSP `u32`, saturating at `u32::MAX`.
+pub(crate) fn lsp_u32(count: usize) -> u32 {
+    u32::try_from(count).unwrap_or(u32::MAX)
+}
+
 /// Number of UTF-16 code units in `text`, the column unit LSP positions use by default.
 pub fn utf16_len(text: &str) -> u32 {
-    text.encode_utf16().count() as u32
+    lsp_u32(text.encode_utf16().count())
 }
 
 /// Byte index in `line` for a UTF-16 column, clamped to the line end and to char boundaries.
@@ -68,7 +74,7 @@ pub struct SystemdDirective {
 
 #[derive(Debug)]
 pub struct SystemdParser {
-    documents: DashMap<Uri, SystemdUnit>,
+    documents: DashMap<Uri, Arc<SystemdUnit>>,
     section_regex: Regex,
     directive_regex: Regex,
 }
@@ -83,8 +89,8 @@ impl Default for SystemdParser {
     fn default() -> Self {
         Self {
             documents: DashMap::new(),
-            section_regex: Regex::new(r"^\[([^\]]+)\]$").unwrap(),
-            directive_regex: Regex::new(r"^([^=]+)=(.*)$").unwrap(),
+            section_regex: Regex::new(r"^\[([^\]]+)\]$").expect("section pattern is valid"),
+            directive_regex: Regex::new(r"^([^=]+)=(.*)$").expect("directive pattern is valid"),
         }
     }
 }
@@ -102,7 +108,7 @@ impl SystemdParser {
         let mut lines = text.lines().enumerate().peekable();
 
         while let Some((raw_line_num, line)) = lines.next() {
-            let line_num = raw_line_num as u32;
+            let line_num = lsp_u32(raw_line_num);
             let trimmed = line.trim();
 
             if trimmed.is_empty() || trimmed.starts_with('#') {
@@ -164,7 +170,7 @@ impl SystemdParser {
                     while continuation {
                         if let Some((next_line_num, next_line)) = lines.next() {
                             let next_line_trimmed = next_line.trim();
-                            end_line_number = next_line_num as u32;
+                            end_line_number = lsp_u32(next_line_num);
 
                             let indent_byte = next_line.find(next_line_trimmed).unwrap_or(0);
                             let indent = utf16_len(&next_line[..indent_byte]);
@@ -237,7 +243,7 @@ impl SystemdParser {
                 .get_mut(&section_name)
                 .and_then(|section| section.line_ranges.last_mut())
             {
-                range.1 = text.lines().count() as u32;
+                range.1 = lsp_u32(text.lines().count());
             }
         }
 
@@ -252,13 +258,16 @@ impl SystemdParser {
         unit
     }
 
-    pub fn update_document(&self, uri: &Uri, text: &str) {
-        let parsed = self.parse(text);
-        self.documents.insert(uri.clone(), parsed);
+    /// Parses `text`, stores it for `uri` and returns the shared parse result.
+    pub fn update_document(&self, uri: &Uri, text: &str) -> Arc<SystemdUnit> {
+        let parsed = Arc::new(self.parse(text));
+        self.documents.insert(uri.clone(), Arc::clone(&parsed));
+        parsed
     }
 
-    pub fn get_parsed_document(&self, uri: &Uri) -> Option<SystemdUnit> {
-        self.documents.get(uri).map(|entry| entry.clone())
+    /// Cheap handle to the stored parse result; the unit itself is not copied.
+    pub fn get_parsed_document(&self, uri: &Uri) -> Option<Arc<SystemdUnit>> {
+        self.documents.get(uri).map(|entry| Arc::clone(&entry))
     }
 
     pub fn get_document_text(&self, uri: &Uri) -> Option<String> {
@@ -266,44 +275,27 @@ impl SystemdParser {
     }
 
     pub fn get_word_at_position(&self, unit: &SystemdUnit, position: &Position) -> Option<String> {
-        let lines: Vec<&str> = unit.raw_text.lines().collect();
-        if let Some(line) = lines.get(position.line as usize) {
-            // Try to extract the word at the cursor position
-            let chars: Vec<char> = line.chars().collect();
-            let cursor_pos = line[..utf16_to_byte(line, position.character)]
-                .chars()
-                .count();
-            if cursor_pos < chars.len() {
-                // Find word boundaries around the cursor
-                let mut start = cursor_pos;
-                let mut end = cursor_pos;
-
-                // Move start backwards to find word start
-                while start > 0
-                    && (chars[start - 1].is_alphanumeric()
-                        || chars[start - 1] == '-'
-                        || chars[start - 1] == '_'
-                        || chars[start - 1] == '.')
-                {
-                    start -= 1;
-                }
-
-                // Move end forwards to find word end
-                while end < chars.len()
-                    && (chars[end].is_alphanumeric()
-                        || chars[end] == '-'
-                        || chars[end] == '_'
-                        || chars[end] == '.')
-                {
-                    end += 1;
-                }
-
-                if start < end {
-                    return Some(chars[start..end].iter().collect());
-                }
-            }
+        fn is_word_char(ch: char) -> bool {
+            ch.is_alphanumeric() || matches!(ch, '-' | '_' | '.')
         }
-        None
+
+        let line = unit.raw_text.lines().nth(position.line as usize)?;
+        let cursor = utf16_to_byte(line, position.character);
+        if cursor >= line.len() {
+            return None;
+        }
+
+        let start = line[..cursor]
+            .char_indices()
+            .rev()
+            .take_while(|&(_, ch)| is_word_char(ch))
+            .last()
+            .map_or(cursor, |(index, _)| index);
+        let end = line[cursor..]
+            .find(|ch| !is_word_char(ch))
+            .map_or(line.len(), |offset| cursor + offset);
+
+        (start < end).then(|| line[start..end].to_string())
     }
 
     pub fn get_section_header_at_position(
@@ -798,6 +790,26 @@ mod tests {
         let parsed = parser.parse("[Unit]\nDescription=\u{1F600}\u{1F600} x y\n");
         let word = parser.get_word_at_position(&parsed, &Position::new(1, 19));
         assert_eq!(word, Some("y".to_string()));
+    }
+
+    #[test]
+    fn test_get_word_at_position_boundaries() {
+        let parser = SystemdParser::new();
+        let parsed = parser.parse("[Unit]\nAfter=network-online.target\n");
+        let word_at =
+            |character| parser.get_word_at_position(&parsed, &Position::new(1, character));
+
+        assert_eq!(word_at(0), Some("After".to_string()));
+        assert_eq!(word_at(2), Some("After".to_string()));
+        // On "=", the word ending at the cursor is used.
+        assert_eq!(word_at(5), Some("After".to_string()));
+        assert_eq!(word_at(10), Some("network-online.target".to_string()));
+        assert_eq!(word_at(26), Some("network-online.target".to_string()));
+        assert_eq!(word_at(27), None);
+        assert_eq!(
+            parser.get_word_at_position(&parsed, &Position::new(9, 0)),
+            None
+        );
     }
 
     #[test]

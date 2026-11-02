@@ -5,7 +5,7 @@ const TOKEN_TYPES: &[&str] = &["keyword", "string"];
 pub(crate) const TOKEN_TYPE_KEYWORD: u32 = 0;
 pub(crate) const TOKEN_TYPE_STRING: u32 = 1;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct SystemdSemanticTokens;
 
 #[derive(Debug)]

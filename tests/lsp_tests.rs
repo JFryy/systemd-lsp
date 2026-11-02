@@ -19,11 +19,10 @@ mod hover_tests {
 
         for section in sections {
             let docs = provider.get_embedded_documentation(section);
-            assert!(docs.is_some(), "{} should have docs", section);
+            assert!(docs.is_some(), "{section} should have docs");
             assert!(
                 docs.unwrap().len() > 100,
-                "{} docs should be substantial",
-                section
+                "{section} docs should be substantial"
             );
         }
     }
@@ -41,7 +40,7 @@ mod hover_tests {
 
         for (section, directive) in directives {
             let docs = completion.get_directive_documentation(directive, section);
-            assert!(docs.is_some(), "{}/{} should have docs", section, directive);
+            assert!(docs.is_some(), "{section}/{directive} should have docs");
             assert!(!docs.unwrap().is_empty());
         }
     }
@@ -53,7 +52,7 @@ mod hover_tests {
 
         for variant in variants {
             let docs = completion.get_directive_documentation(variant, "Unit");
-            assert!(docs.is_some(), "Case variant '{}' should work", variant);
+            assert!(docs.is_some(), "Case variant '{variant}' should work");
         }
     }
 
@@ -158,8 +157,7 @@ mod documentation_tests {
         for section in sections {
             assert!(
                 provider.get_embedded_documentation(section).is_some(),
-                "Section '{}' should have docs",
-                section
+                "Section '{section}' should have docs"
             );
         }
     }
@@ -214,7 +212,7 @@ mod documentation_tests {
         if !missing.is_empty() {
             println!("Missing sections:");
             for s in &missing {
-                println!("  - {}", s);
+                println!("  - {s}");
             }
             panic!("{} sections missing documentation", missing.len());
         } else {
@@ -237,7 +235,7 @@ mod documentation_tests {
                     .get_directive_documentation(directive, section)
                     .is_none()
                 {
-                    missing.push(format!("{}/{}", section, directive));
+                    missing.push(format!("{section}/{directive}"));
                 }
             }
         }
@@ -253,7 +251,7 @@ mod documentation_tests {
         if !missing.is_empty() {
             println!("Missing ({}):", missing.len());
             for d in missing.iter().take(10) {
-                println!("  - {}", d);
+                println!("  - {d}");
             }
             if missing.len() > 10 {
                 println!("  ... and {} more", missing.len() - 10);

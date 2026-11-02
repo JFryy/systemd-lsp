@@ -3,24 +3,13 @@ use log::{debug, info, trace, warn};
 use std::env;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
+use systemd_lsp::{
+    SystemdCompletion, SystemdDefinitionProvider, SystemdDiagnostics, SystemdFormatter,
+    SystemdParser, SystemdSemanticTokens,
+};
 use tower_lsp_server::jsonrpc::Result;
 use tower_lsp_server::ls_types::*;
 use tower_lsp_server::{Client, LanguageServer, LspService, Server};
-
-mod completion;
-mod constants;
-mod definition;
-mod diagnostics;
-mod formatting;
-mod parser;
-mod semantic_tokens;
-
-use completion::SystemdCompletion;
-use definition::SystemdDefinitionProvider;
-use diagnostics::SystemdDiagnostics;
-use formatting::SystemdFormatter;
-use parser::SystemdParser;
-use semantic_tokens::SystemdSemanticTokens;
 
 #[derive(Debug)]
 pub struct SystemdLanguageServer {
@@ -91,7 +80,7 @@ impl LanguageServer for SystemdLanguageServer {
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
         let uri = &params.text_document.uri;
-        info!("Document opened: {:?}", uri);
+        info!("Document opened: {uri:?}");
         debug!("Document language: {}", params.text_document.language_id);
         debug!("Document version: {}", params.text_document.version);
 
@@ -156,16 +145,13 @@ impl LanguageServer for SystemdLanguageServer {
             position.line, position.character, uri
         );
 
-        let result = self
-            .completion
-            .get_completions(&self.parser, uri, position)
-            .await;
+        let result = self.completion.get_completions(&self.parser, uri, position);
         let count = result.as_ref().map_or(0, |r| match r {
             CompletionResponse::Array(items) => items.len(),
             CompletionResponse::List(list) => list.items.len(),
         });
 
-        debug!("Returning {} completion items", count);
+        debug!("Returning {count} completion items");
         Ok(result)
     }
 
@@ -188,7 +174,7 @@ impl LanguageServer for SystemdLanguageServer {
             )
             .await;
 
-        let result = self.get_hover_info(uri, position).await;
+        let result = self.get_hover_info(uri, position);
 
         if result.is_some() {
             debug!("Hover info found and returned");
@@ -207,14 +193,14 @@ impl LanguageServer for SystemdLanguageServer {
 
     async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
         let uri = &params.text_document.uri;
-        debug!("Formatting request for {:?}", uri);
+        debug!("Formatting request for {uri:?}");
 
-        if let Some(document_text) = self.parser.get_document_text(uri) {
-            let edits = self.formatter.format_document(uri, &document_text);
+        if let Some(unit) = self.parser.get_parsed_document(uri) {
+            let edits = self.formatter.format_document(uri, &unit.raw_text);
             debug!("Generated {} formatting edits", edits.len());
             Ok(Some(edits))
         } else {
-            debug!("Document not found for formatting: {:?}", uri);
+            debug!("Document not found for formatting: {uri:?}");
             Ok(None)
         }
     }
@@ -225,14 +211,14 @@ impl LanguageServer for SystemdLanguageServer {
     ) -> Result<Option<Vec<TextEdit>>> {
         let uri = &params.text_document.uri;
         let range = &params.range;
-        debug!("Range formatting request for {:?} at {:?}", uri, range);
+        debug!("Range formatting request for {uri:?} at {range:?}");
 
-        if let Some(document_text) = self.parser.get_document_text(uri) {
-            let edits = self.formatter.format_range(uri, &document_text, *range);
+        if let Some(unit) = self.parser.get_parsed_document(uri) {
+            let edits = self.formatter.format_range(uri, &unit.raw_text, *range);
             debug!("Generated {} range formatting edits", edits.len());
             Ok(Some(edits))
         } else {
-            debug!("Document not found for range formatting: {:?}", uri);
+            debug!("Document not found for range formatting: {uri:?}");
             Ok(None)
         }
     }
@@ -251,8 +237,7 @@ impl LanguageServer for SystemdLanguageServer {
 
         let result = self
             .definition_provider
-            .get_definition(&self.parser, uri, position)
-            .await;
+            .get_definition(&self.parser, uri, position);
 
         if result.is_some() {
             debug!("Definition found and returned");
@@ -268,11 +253,11 @@ impl LanguageServer for SystemdLanguageServer {
         params: SemanticTokensParams,
     ) -> Result<Option<SemanticTokensResult>> {
         let uri = &params.text_document.uri;
-        debug!("Semantic tokens full request for {:?}", uri);
+        debug!("Semantic tokens full request for {uri:?}");
 
         let tokens = self.semantic_tokens.get_semantic_tokens(&self.parser, uri);
         let count = tokens.as_ref().map_or(0, |t| t.data.len());
-        debug!("Generated {} semantic tokens", count);
+        debug!("Generated {count} semantic tokens");
 
         Ok(tokens.map(SemanticTokensResult::Tokens))
     }
@@ -296,13 +281,11 @@ impl SystemdLanguageServer {
         debug!("Processing document change for {:?}", params.uri);
         trace!("Document text length: {} characters", params.text.len());
 
-        let parsed = self.parser.parse(&params.text);
+        let parsed = self.parser.update_document(&params.uri, &params.text);
         debug!("Document parsed, found {} sections", parsed.sections.len());
 
-        self.parser.update_document(&params.uri, &params.text);
-        self.diagnostics.update(&params.uri, parsed).await;
-
-        let diagnostics = self.diagnostics.get_diagnostics(&params.uri).await;
+        self.diagnostics.update(&params.uri, &parsed);
+        let diagnostics = self.diagnostics.get_diagnostics(&params.uri);
         debug!(
             "Publishing {} diagnostics for {:?}",
             diagnostics.len(),
@@ -314,7 +297,7 @@ impl SystemdLanguageServer {
             .await;
     }
 
-    async fn get_hover_info(&self, uri: &Uri, position: &Position) -> Option<Hover> {
+    fn get_hover_info(&self, uri: &Uri, position: &Position) -> Option<Hover> {
         trace!(
             "Getting hover info for {}:{} in {:?}",
             position.line,
@@ -323,67 +306,45 @@ impl SystemdLanguageServer {
         );
         let parsed = self.parser.get_parsed_document(uri)?;
 
-        // Check if hovering over a section header specifically
         if let Some(section_name) = self
             .parser
             .get_section_header_at_position(&parsed, position)
         {
-            // Use the full embedded documentation for section headers
-            let section_key = section_name.to_lowercase();
-            if let Some(full_docs) = self
+            if let Some(docs) = self
                 .definition_provider
-                .get_embedded_documentation(&section_key)
+                .get_embedded_documentation(&section_name)
             {
-                return Some(Hover {
-                    contents: HoverContents::Markup(MarkupContent {
-                        kind: MarkupKind::Markdown,
-                        value: Self::truncate_documentation(&full_docs),
-                    }),
-                    range: None,
-                });
-            }
-
-            // Fallback to short documentation if embedded docs not available
-            let section_docs = self.get_section_documentation(&section_name);
-            if let Some(docs) = section_docs {
-                return Some(Hover {
-                    contents: HoverContents::Markup(MarkupContent {
-                        kind: MarkupKind::Markdown,
-                        value: Self::truncate_documentation(&docs),
-                    }),
-                    range: None,
-                });
+                return Some(Self::markdown_hover(Self::truncate_documentation(docs)));
             }
         }
 
-        // Check if hovering over a directive
         if let Some(directive_name) = self.parser.get_word_at_position(&parsed, position) {
             let current_section = self.parser.get_section_at_line(&parsed, position.line)?;
-            let directive_docs =
-                self.get_directive_documentation(&directive_name, &current_section.name);
-            if let Some(docs) = directive_docs {
-                return Some(Hover {
-                    contents: HoverContents::Markup(MarkupContent {
-                        kind: MarkupKind::Markdown,
-                        value: Self::truncate_documentation(&docs),
-                    }),
-                    range: None,
-                });
+            if let Some(docs) = self
+                .completion
+                .get_directive_documentation(&directive_name, &current_section.name)
+            {
+                return Some(Self::markdown_hover(Self::truncate_documentation(&docs)));
             }
         }
 
-        // Fallback - provide generic help if hovering over any recognized line
-        if let Some(section) = self.parser.get_section_at_line(&parsed, position.line) {
-            return Some(Hover {
-                contents: HoverContents::Markup(MarkupContent {
-                    kind: MarkupKind::Markdown,
-                    value: format!("**systemd {} configuration**\n\nHover over section headers `[{}]` or directive names for detailed documentation.", section.name.to_lowercase(), section.name),
-                }),
-                range: None,
-            });
-        }
+        // Generic help for any other line inside a section
+        let section = self.parser.get_section_at_line(&parsed, position.line)?;
+        Some(Self::markdown_hover(format!(
+            "**systemd {} configuration**\n\nHover over section headers `[{}]` or directive names for detailed documentation.",
+            section.name.to_lowercase(),
+            section.name
+        )))
+    }
 
-        None
+    fn markdown_hover(value: String) -> Hover {
+        Hover {
+            contents: HoverContents::Markup(MarkupContent {
+                kind: MarkupKind::Markdown,
+                value,
+            }),
+            range: None,
+        }
     }
 
     /// Truncate documentation to a reasonable size for hover display
@@ -391,20 +352,19 @@ impl SystemdLanguageServer {
         const MAX_LINES: usize = 50;
         const MAX_CHARS: usize = 4000;
 
-        let lines: Vec<&str> = docs.lines().collect();
-
-        // Check if truncation is needed
-        if lines.len() <= MAX_LINES && docs.len() <= MAX_CHARS {
+        let mut lines = docs.lines();
+        let head: Vec<&str> = lines.by_ref().take(MAX_LINES).collect();
+        if lines.next().is_none() && docs.len() <= MAX_CHARS {
             return docs.to_string();
         }
 
-        // Truncate by lines first
-        let truncated_lines: Vec<&str> = lines.iter().take(MAX_LINES).copied().collect();
-        let mut result = truncated_lines.join("\n");
-
-        // Then truncate by characters if still too long
+        let mut result = head.join("\n");
         if result.len() > MAX_CHARS {
-            result.truncate(MAX_CHARS);
+            let mut end = MAX_CHARS;
+            while !result.is_char_boundary(end) {
+                end -= 1;
+            }
+            result.truncate(end);
             // Try to truncate at a word boundary
             if let Some(last_space) = result.rfind(' ') {
                 result.truncate(last_space);
@@ -416,19 +376,6 @@ impl SystemdLanguageServer {
             "\n\n---\n*Documentation truncated. Use 'Go to Definition' for full details.*",
         );
         result
-    }
-
-    fn get_section_documentation(&self, section_name: &str) -> Option<String> {
-        self.completion.get_section_documentation(section_name)
-    }
-
-    fn get_directive_documentation(
-        &self,
-        directive_name: &str,
-        section_name: &str,
-    ) -> Option<String> {
-        self.completion
-            .get_directive_documentation(directive_name, section_name)
     }
 }
 
@@ -545,7 +492,7 @@ fn is_systemd_file(path: &Path) -> bool {
 }
 
 /// Run diagnostics on files in CLI mode
-async fn run_cli_diagnostics(paths: Vec<PathBuf>, recursive: bool) -> std::io::Result<i32> {
+fn run_cli_diagnostics(paths: Vec<PathBuf>, recursive: bool) -> std::io::Result<i32> {
     let files = collect_files(&paths, recursive)?;
 
     if files.is_empty() {
@@ -568,13 +515,7 @@ async fn run_cli_diagnostics(paths: Vec<PathBuf>, recursive: bool) -> std::io::R
             }
         };
 
-        let uri = format!("file://{}", file_path.display())
-            .parse::<Uri>()
-            .unwrap();
-
-        let parsed = parser.parse(&content);
-        diagnostics_engine.update(&uri, parsed).await;
-        let diags = diagnostics_engine.get_diagnostics(&uri).await;
+        let diags = diagnostics_engine.diagnose(&parser.parse(&content));
 
         if !diags.is_empty() {
             files_with_issues += 1;
@@ -660,7 +601,7 @@ fn setup_logging() {
             _ => log::LevelFilter::Info,
         };
 
-        debug!("Environment log level setting: {}", log_level);
+        debug!("Environment log level setting: {log_level}");
 
         let mut builder = env_logger::Builder::new();
         builder
@@ -670,7 +611,7 @@ fn setup_logging() {
             .init();
 
         info!("systemdls starting as LSP server");
-        info!("Log level: {}", level_filter);
+        info!("Log level: {level_filter}");
     }
 }
 
@@ -683,10 +624,10 @@ async fn main() {
         let cli = Cli::parse();
 
         // Run CLI diagnostics mode
-        match run_cli_diagnostics(cli.paths, cli.recursive).await {
+        match run_cli_diagnostics(cli.paths, cli.recursive) {
             Ok(exit_code) => std::process::exit(exit_code),
             Err(e) => {
-                eprintln!("Error: {}", e);
+                eprintln!("Error: {e}");
                 std::process::exit(1);
             }
         }
@@ -788,6 +729,22 @@ mod tests {
     }
 
     #[test]
+    fn test_truncate_documentation_respects_char_boundaries() {
+        // 3-byte characters put byte 4000 in the middle of a character.
+        let docs = "\u{2192}".repeat(2000);
+        let truncated = SystemdLanguageServer::truncate_documentation(&docs);
+        assert!(truncated.starts_with('\u{2192}'));
+        assert!(truncated.ends_with("for full details.*"));
+
+        let short = "line\n".repeat(10);
+        assert_eq!(SystemdLanguageServer::truncate_documentation(&short), short);
+
+        let long = "line\n".repeat(60);
+        let truncated = SystemdLanguageServer::truncate_documentation(&long);
+        assert_eq!(truncated.matches("line").count(), 50);
+    }
+
+    #[test]
     fn test_integrated_parsing_and_semantics() {
         // Test that parser and semantic tokens work together
         let parser = SystemdParser::new();
@@ -804,28 +761,25 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn test_integrated_parsing_and_diagnostics() {
+    #[test]
+    fn test_integrated_parsing_and_diagnostics() {
         // Test that parser and diagnostics work together
         let parser = SystemdParser::new();
         let diagnostics = SystemdDiagnostics::new();
         let uri: Uri = "file:///test.service".parse().unwrap();
 
         // Test with valid content
-        let content = "[Service]\nType=simple";
-        let parsed = parser.parse(content);
-        parser.update_document(&uri, content);
-        diagnostics.update(&uri, parsed).await;
+        let parsed = parser.update_document(&uri, "[Service]\nType=simple");
+        diagnostics.update(&uri, &parsed);
 
-        let diags = diagnostics.get_diagnostics(&uri).await;
+        let diags = diagnostics.get_diagnostics(&uri);
         assert_eq!(diags.len(), 0, "Valid content should have no diagnostics");
 
         // Test with invalid content
-        let invalid_content = "[InvalidSection]\nInvalidDirective=value";
-        let parsed = parser.parse(invalid_content);
-        diagnostics.update(&uri, parsed).await;
+        let parsed = parser.update_document(&uri, "[InvalidSection]\nInvalidDirective=value");
+        diagnostics.update(&uri, &parsed);
 
-        let diags = diagnostics.get_diagnostics(&uri).await;
+        let diags = diagnostics.get_diagnostics(&uri);
         assert!(!diags.is_empty(), "Invalid content should have diagnostics");
     }
 
@@ -845,8 +799,8 @@ mod tests {
         assert!(service.inner().parser.get_parsed_document(&uri).is_none());
     }
 
-    #[tokio::test]
-    async fn test_integrated_parsing_and_completion() {
+    #[test]
+    fn test_integrated_parsing_and_completion() {
         // Test that parser and completion work together
         let parser = SystemdParser::new();
         let completion = SystemdCompletion::new();
@@ -856,12 +810,7 @@ mod tests {
         parser.update_document(&uri, content);
 
         // Test completion after "Type="
-        let position = Position {
-            line: 1,
-            character: 5,
-        };
-
-        let completions = completion.get_completions(&parser, &uri, &position).await;
+        let completions = completion.get_completions(&parser, &uri, &Position::new(1, 5));
         assert!(completions.is_some(), "Should provide completions");
     }
 
@@ -912,7 +861,7 @@ mod tests {
     #[test]
     fn test_constants_validation() {
         // Test that constants module has valid data
-        let sections = constants::SystemdConstants::valid_sections();
+        let sections = systemd_lsp::SystemdConstants::valid_sections();
         assert!(!sections.is_empty(), "Should have valid sections");
         assert!(sections.contains(&"Unit"), "Should include Unit section");
         assert!(
@@ -921,7 +870,7 @@ mod tests {
         );
 
         // Verify section directives exist
-        let section_directives = constants::SystemdConstants::section_directives();
+        let section_directives = systemd_lsp::SystemdConstants::section_directives();
         assert!(
             !section_directives.is_empty(),
             "Should have section directives"

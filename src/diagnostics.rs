@@ -1,48 +1,54 @@
 use crate::constants::SystemdConstants;
-use crate::parser::{utf16_len, DirectiveValueSpan, SystemdSection, SystemdUnit};
+use crate::parser::{utf16_len, SystemdDirective, SystemdSection, SystemdUnit};
 use dashmap::DashMap;
 use log::{debug, trace};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use tower_lsp_server::ls_types::{Diagnostic, DiagnosticSeverity, Position, Range, Uri};
 
 #[derive(Debug)]
 pub struct SystemdDiagnostics {
     diagnostics: DashMap<Uri, Vec<Diagnostic>>,
     valid_sections: HashSet<&'static str>,
-    section_directives: DashMap<&'static str, HashSet<&'static str>>,
+    section_directives: HashMap<&'static str, HashSet<&'static str>>,
+}
+
+impl Default for SystemdDiagnostics {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SystemdDiagnostics {
     pub fn new() -> Self {
-        let valid_sections: HashSet<&'static str> =
-            SystemdConstants::valid_sections().iter().cloned().collect();
-
-        let section_directives = DashMap::new();
-        for (section, directives) in SystemdConstants::section_directives() {
-            let directive_set: HashSet<&'static str> = directives.iter().cloned().collect();
-            section_directives.insert(section, directive_set);
-        }
+        let section_directives = SystemdConstants::section_directives()
+            .iter()
+            .map(|(&section, directives)| (section, directives.iter().copied().collect()))
+            .collect();
 
         Self {
             diagnostics: DashMap::new(),
-            valid_sections,
+            valid_sections: SystemdConstants::valid_sections().iter().copied().collect(),
             section_directives,
         }
     }
 
-    pub async fn update(&self, uri: &Uri, unit: SystemdUnit) {
-        trace!("Updating diagnostics for {:?}", uri);
+    /// Validates `unit` and returns its diagnostics without storing them.
+    pub fn diagnose(&self, unit: &SystemdUnit) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
-
         for section in unit.sections.values() {
             self.validate_section(section, &mut diagnostics);
         }
+        diagnostics
+    }
 
+    pub fn update(&self, uri: &Uri, unit: &SystemdUnit) {
+        trace!("Updating diagnostics for {uri:?}");
+        let diagnostics = self.diagnose(unit);
         debug!("Generated {} diagnostics for {:?}", diagnostics.len(), uri);
         self.diagnostics.insert(uri.clone(), diagnostics);
     }
 
-    pub async fn get_diagnostics(&self, uri: &Uri) -> Vec<Diagnostic> {
+    pub fn get_diagnostics(&self, uri: &Uri) -> Vec<Diagnostic> {
         self.diagnostics
             .get(uri)
             .map(|entry| entry.clone())
@@ -60,12 +66,7 @@ impl SystemdDiagnostics {
                     ),
                     message: format!("Unknown section: [{}]", section.name),
                     severity: Some(DiagnosticSeverity::WARNING),
-                    code: None,
-                    code_description: None,
-                    source: None,
-                    related_information: None,
-                    tags: None,
-                    data: None,
+                    ..Diagnostic::default()
                 });
             }
             return;
@@ -80,16 +81,12 @@ impl SystemdDiagnostics {
                             Position::new(directive.line_number, directive.column_range.1),
                         ),
                         severity: Some(DiagnosticSeverity::WARNING),
-                        code: None,
-                        code_description: None,
                         source: Some(SystemdConstants::APP_NAME.to_string()),
                         message: format!(
                             "Unknown directive '{}' in [{}] section",
                             directive.key, section.name
                         ),
-                        related_information: None,
-                        tags: None,
-                        data: None,
+                        ..Diagnostic::default()
                     });
                 }
 
@@ -101,13 +98,14 @@ impl SystemdDiagnostics {
     fn validate_directive_value(
         &self,
         section: &SystemdSection,
-        directive: &crate::parser::SystemdDirective,
+        directive: &SystemdDirective,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
         if section.name == "Service" && directive.key == "ExecStart" && directive.value.is_empty() {
-            diagnostics.push(
-                self.create_value_diagnostic(directive, "ExecStart cannot be empty".to_string()),
-            );
+            diagnostics.push(Self::create_value_diagnostic(
+                directive,
+                "ExecStart cannot be empty".to_string(),
+            ));
             return;
         }
 
@@ -123,7 +121,7 @@ impl SystemdDiagnostics {
             };
 
             if !is_valid {
-                diagnostics.push(self.create_value_diagnostic(
+                diagnostics.push(Self::create_value_diagnostic(
                     directive,
                     format!(
                         "Invalid {} value '{}'. Valid values: {}",
@@ -136,41 +134,26 @@ impl SystemdDiagnostics {
         }
     }
 
-    fn create_value_diagnostic(
-        &self,
-        directive: &crate::parser::SystemdDirective,
-        message: String,
-    ) -> Diagnostic {
-        let value_start_span =
-            directive
-                .value_spans
-                .first()
-                .cloned()
-                .unwrap_or(DirectiveValueSpan {
-                    line: directive.line_number,
-                    start: directive.column_range.1 + 1,
-                    end: directive.column_range.1 + 1,
-                });
-
-        let value_end_span = directive
-            .value_spans
-            .last()
-            .cloned()
-            .unwrap_or(value_start_span.clone());
+    /// Error spanning the directive's value; an empty value is reported just after the `=`.
+    fn create_value_diagnostic(directive: &SystemdDirective, message: String) -> Diagnostic {
+        let range = match (directive.value_spans.first(), directive.value_spans.last()) {
+            (Some(first), Some(last)) => Range::new(
+                Position::new(first.line, first.start),
+                Position::new(last.line, last.end),
+            ),
+            _ => {
+                let after_equals =
+                    Position::new(directive.line_number, directive.column_range.1 + 1);
+                Range::new(after_equals, after_equals)
+            }
+        };
 
         Diagnostic {
-            range: Range::new(
-                Position::new(value_start_span.line, value_start_span.start),
-                Position::new(value_end_span.line, value_end_span.end),
-            ),
+            range,
             severity: Some(DiagnosticSeverity::ERROR),
-            code: None,
-            code_description: None,
             source: Some(SystemdConstants::APP_NAME.to_string()),
             message,
-            related_information: None,
-            tags: None,
-            data: None,
+            ..Diagnostic::default()
         }
     }
 }
@@ -224,11 +207,8 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn test_valid_unit_no_diagnostics() {
-        let diagnostics = SystemdDiagnostics::new();
-        let uri = "file:///test.service".parse::<Uri>().unwrap();
-
+    #[test]
+    fn test_valid_unit_no_diagnostics() {
         let unit = create_test_unit(vec![
             ("Unit", vec![("Description", "Test service")]),
             (
@@ -238,36 +218,27 @@ mod tests {
             ("Install", vec![("WantedBy", "multi-user.target")]),
         ]);
 
-        diagnostics.update(&uri, unit).await;
-        let result = diagnostics.get_diagnostics(&uri).await;
+        let result = SystemdDiagnostics::new().diagnose(&unit);
 
         assert_eq!(result.len(), 0);
     }
 
-    #[tokio::test]
-    async fn test_invalid_section_diagnostic() {
-        let diagnostics = SystemdDiagnostics::new();
-        let uri = "file:///test.service".parse::<Uri>().unwrap();
-
+    #[test]
+    fn test_invalid_section_diagnostic() {
         let unit = create_test_unit(vec![("InvalidSection", vec![("SomeKey", "SomeValue")])]);
 
-        diagnostics.update(&uri, unit).await;
-        let result = diagnostics.get_diagnostics(&uri).await;
+        let result = SystemdDiagnostics::new().diagnose(&unit);
 
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].message, "Unknown section: [InvalidSection]");
         assert_eq!(result[0].range.start.line, 0);
     }
 
-    #[tokio::test]
-    async fn test_invalid_directive_diagnostic() {
-        let diagnostics = SystemdDiagnostics::new();
-        let uri = "file:///test.service".parse::<Uri>().unwrap();
-
+    #[test]
+    fn test_invalid_directive_diagnostic() {
         let unit = create_test_unit(vec![("Unit", vec![("InvalidDirective", "SomeValue")])]);
 
-        diagnostics.update(&uri, unit).await;
-        let result = diagnostics.get_diagnostics(&uri).await;
+        let result = SystemdDiagnostics::new().diagnose(&unit);
 
         assert_eq!(result.len(), 1);
         assert_eq!(
@@ -277,30 +248,22 @@ mod tests {
         assert_eq!(result[0].severity, Some(DiagnosticSeverity::WARNING));
     }
 
-    #[tokio::test]
-    async fn test_empty_execstart_diagnostic() {
-        let diagnostics = SystemdDiagnostics::new();
-        let uri = "file:///test.service".parse::<Uri>().unwrap();
-
+    #[test]
+    fn test_empty_execstart_diagnostic() {
         let unit = create_test_unit(vec![("Service", vec![("ExecStart", "")])]);
 
-        diagnostics.update(&uri, unit).await;
-        let result = diagnostics.get_diagnostics(&uri).await;
+        let result = SystemdDiagnostics::new().diagnose(&unit);
 
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].message, "ExecStart cannot be empty");
         assert_eq!(result[0].severity, Some(DiagnosticSeverity::ERROR));
     }
 
-    #[tokio::test]
-    async fn test_invalid_type_value_diagnostic() {
-        let diagnostics = SystemdDiagnostics::new();
-        let uri = "file:///test.service".parse::<Uri>().unwrap();
-
+    #[test]
+    fn test_invalid_type_value_diagnostic() {
         let unit = create_test_unit(vec![("Service", vec![("Type", "invalid_type")])]);
 
-        diagnostics.update(&uri, unit).await;
-        let result = diagnostics.get_diagnostics(&uri).await;
+        let result = SystemdDiagnostics::new().diagnose(&unit);
 
         assert_eq!(result.len(), 1);
         assert!(result[0]
@@ -309,25 +272,21 @@ mod tests {
         assert_eq!(result[0].severity, Some(DiagnosticSeverity::ERROR));
     }
 
-    #[tokio::test]
-    async fn test_multiple_diagnostics() {
-        let diagnostics = SystemdDiagnostics::new();
-        let uri = "file:///test.service".parse::<Uri>().unwrap();
-
+    #[test]
+    fn test_multiple_diagnostics() {
         let unit = create_test_unit(vec![
             ("InvalidSection", vec![("SomeKey", "SomeValue")]),
             ("Unit", vec![("InvalidDirective", "SomeValue")]),
             ("Service", vec![("ExecStart", ""), ("Type", "invalid_type")]),
         ]);
 
-        diagnostics.update(&uri, unit).await;
-        let result = diagnostics.get_diagnostics(&uri).await;
+        let result = SystemdDiagnostics::new().diagnose(&unit);
 
         assert!(result.len() >= 3);
     }
 
-    #[tokio::test]
-    async fn test_diagnostics_persistence() {
+    #[test]
+    fn test_diagnostics_persistence() {
         let diagnostics = SystemdDiagnostics::new();
         let uri1 = "file:///test1.service".parse::<Uri>().unwrap();
         let uri2 = "file:///test2.service".parse::<Uri>().unwrap();
@@ -335,11 +294,11 @@ mod tests {
         let unit1 = create_test_unit(vec![("InvalidSection", vec![("SomeKey", "SomeValue")])]);
         let unit2 = create_test_unit(vec![("Unit", vec![("Description", "Valid service")])]);
 
-        diagnostics.update(&uri1, unit1).await;
-        diagnostics.update(&uri2, unit2).await;
+        diagnostics.update(&uri1, &unit1);
+        diagnostics.update(&uri2, &unit2);
 
-        let result1 = diagnostics.get_diagnostics(&uri1).await;
-        let result2 = diagnostics.get_diagnostics(&uri2).await;
+        let result1 = diagnostics.get_diagnostics(&uri1);
+        let result2 = diagnostics.get_diagnostics(&uri2);
 
         assert_eq!(result1.len(), 1);
         assert_eq!(result2.len(), 0);

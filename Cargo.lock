@@ -86,17 +86,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-trait"
-version = "0.1.92"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82f6aeea286b8eb4dd3431a1be1b59d290ace00f5bfd8e2a159bc2a05e2c1667"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 3.0.9",
-]
-
-[[package]]
 name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -725,15 +714,12 @@ checksum = "0bf256ce5efdfa370213c1dabab5935a12e49f2c58d15e9eac2870d3b4f27263"
 name = "systemd-lsp"
 version = "0.2.1"
 dependencies = [
- "async-trait",
  "clap",
  "dashmap",
  "env_logger",
  "log",
  "regex",
  "serde",
- "serde_json",
- "thiserror",
  "tokio",
  "tokio-test",
  "tower-lsp-server",
