@@ -3,8 +3,8 @@ use crate::parser::SystemdParser;
 use log::{debug, trace};
 use std::collections::HashMap;
 use tower_lsp_server::lsp_types::{
-    CompletionItem, CompletionItemKind, CompletionResponse, Documentation, MarkupContent,
-    MarkupKind, Position, Uri,
+    CompletionItem, CompletionItemKind, CompletionResponse, CompletionTextEdit, Documentation,
+    MarkupContent, MarkupKind, Position, Range, TextEdit, Uri,
 };
 
 #[derive(Debug)]
@@ -91,7 +91,21 @@ impl SystemdCompletion {
             CompletionContext::SectionHeader => {
                 // Only show section completions
                 debug!("Providing section completions");
-                Some(CompletionResponse::Array(self.section_completions.clone()))
+                let Some(range) = Self::section_header_range(&document_text, position) else {
+                    return Some(CompletionResponse::Array(self.section_completions.clone()));
+                };
+                let items = self
+                    .section_completions
+                    .iter()
+                    .cloned()
+                    .map(|mut item| {
+                        let new_text = item.insert_text.clone().unwrap_or(item.label.clone());
+                        item.text_edit =
+                            Some(CompletionTextEdit::Edit(TextEdit::new(range, new_text)));
+                        item
+                    })
+                    .collect();
+                Some(CompletionResponse::Array(items))
             }
             CompletionContext::Directive(section_name) => {
                 // Only show directives for the current section
@@ -131,6 +145,27 @@ impl SystemdCompletion {
                 Some(CompletionResponse::Array(self.section_completions.clone()))
             }
         }
+    }
+
+    /// Range of the partially typed header ("[Se" or "[Se]") that a section completion replaces,
+    /// so clients don't insert a second "[". Positions are character offsets (ASCII headers).
+    fn section_header_range(document_text: &str, position: &Position) -> Option<Range> {
+        let line: Vec<char> = document_text
+            .lines()
+            .nth(position.line as usize)?
+            .chars()
+            .collect();
+        let cursor = (position.character as usize).min(line.len());
+        let start = line[..cursor].iter().position(|&c| c == '[')?;
+        let end = if line.get(cursor) == Some(&']') {
+            cursor + 1
+        } else {
+            cursor
+        };
+        Some(Range::new(
+            Position::new(position.line, start as u32),
+            Position::new(position.line, end as u32),
+        ))
     }
 
     fn determine_context(
@@ -725,6 +760,33 @@ mod tests {
             // Should not show directives in section header context
             assert!(!items.iter().any(|item| item.label == "Description"));
             assert!(!items.iter().any(|item| item.label == "Type"));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_section_header_completion_replaces_typed_bracket() {
+        let completion = SystemdCompletion::new();
+        let parser = SystemdParser::new();
+        let uri = "file:///test.service".parse::<Uri>().unwrap();
+
+        for (document_text, cursor, end) in [("[Se", 3, 3), ("[Se]", 3, 4), ("  [", 3, 3)] {
+            parser.update_document(&uri, document_text);
+            let Some(CompletionResponse::Array(items)) = completion
+                .get_completions(&parser, &uri, &Position::new(0, cursor))
+                .await
+            else {
+                panic!("expected section completions for {document_text:?}");
+            };
+            let service = items
+                .iter()
+                .find(|item| item.label == "[Service]")
+                .expect("[Service] completion");
+            let start = document_text.find('[').unwrap() as u32;
+            let expected = CompletionTextEdit::Edit(TextEdit::new(
+                Range::new(Position::new(0, start), Position::new(0, end)),
+                "[Service]".to_string(),
+            ));
+            assert_eq!(service.text_edit, Some(expected), "for {document_text:?}");
         }
     }
 
