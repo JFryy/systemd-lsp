@@ -1,5 +1,5 @@
 use crate::constants::SystemdConstants;
-use crate::parser::SystemdParser;
+use crate::parser::{utf16_len, utf16_to_byte, SystemdParser};
 use log::{debug, trace};
 use std::collections::HashMap;
 use tower_lsp_server::lsp_types::{
@@ -19,6 +19,12 @@ enum CompletionContext {
     Directive(String),
     Value { section: String, directive: String },
     Global,
+}
+
+impl Default for SystemdCompletion {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SystemdCompletion {
@@ -148,23 +154,19 @@ impl SystemdCompletion {
     }
 
     /// Range of the partially typed header ("[Se" or "[Se]") that a section completion replaces,
-    /// so clients don't insert a second "[". Positions are character offsets (ASCII headers).
+    /// so clients don't insert a second "[". Columns are UTF-16 code units.
     fn section_header_range(document_text: &str, position: &Position) -> Option<Range> {
-        let line: Vec<char> = document_text
-            .lines()
-            .nth(position.line as usize)?
-            .chars()
-            .collect();
-        let cursor = (position.character as usize).min(line.len());
-        let start = line[..cursor].iter().position(|&c| c == '[')?;
-        let end = if line.get(cursor) == Some(&']') {
-            cursor + 1
+        let line = document_text.lines().nth(position.line as usize)?;
+        let cursor_byte = utf16_to_byte(line, position.character);
+        let start_byte = line[..cursor_byte].find('[')?;
+        let end_byte = if line[cursor_byte..].starts_with(']') {
+            cursor_byte + 1
         } else {
-            cursor
+            cursor_byte
         };
         Some(Range::new(
-            Position::new(position.line, start as u32),
-            Position::new(position.line, end as u32),
+            Position::new(position.line, utf16_len(&line[..start_byte])),
+            Position::new(position.line, utf16_len(&line[..end_byte])),
         ))
     }
 
@@ -378,7 +380,10 @@ impl SystemdCompletion {
 
         // First, try to find the directive in the section's own markdown file
         let section_docs = SystemdConstants::section_documentation();
-        if let Some(section_key) = section_docs.keys().find(|k| k.eq_ignore_ascii_case(section_name)) {
+        if let Some(section_key) = section_docs
+            .keys()
+            .find(|k| k.eq_ignore_ascii_case(section_name))
+        {
             if let Some(markdown_content) = section_docs.get(section_key) {
                 if let Some(result) = search_in_markdown(markdown_content, directive_name) {
                     return Some(result);

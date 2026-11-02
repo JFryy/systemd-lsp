@@ -11,11 +11,42 @@ pub struct SystemdUnit {
     pub raw_text: String,
 }
 
+/// A section and the directives from every occurrence of its header. systemd merges
+/// repeated sections, so each occurrence keeps its own line range.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemdSection {
     pub name: String,
     pub directives: Vec<SystemdDirective>,
-    pub line_range: (u32, u32),
+    pub line_ranges: Vec<(u32, u32)>,
+}
+
+impl SystemdSection {
+    pub fn contains_line(&self, line: u32) -> bool {
+        self.line_ranges
+            .iter()
+            .any(|&(start, end)| line >= start && line <= end)
+    }
+
+    pub fn is_header_line(&self, line: u32) -> bool {
+        self.line_ranges.iter().any(|&(start, _)| start == line)
+    }
+}
+
+/// Number of UTF-16 code units in `text`, the column unit LSP positions use by default.
+pub fn utf16_len(text: &str) -> u32 {
+    text.encode_utf16().count() as u32
+}
+
+/// Byte index in `line` for a UTF-16 column, clamped to the line end and to char boundaries.
+pub fn utf16_to_byte(line: &str, column: u32) -> usize {
+    let mut units = 0u32;
+    for (byte_index, ch) in line.char_indices() {
+        if units >= column {
+            return byte_index;
+        }
+        units += ch.len_utf16() as u32;
+    }
+    line.len()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -44,13 +75,21 @@ pub struct SystemdParser {
 
 impl SystemdParser {
     pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl Default for SystemdParser {
+    fn default() -> Self {
         Self {
             documents: DashMap::new(),
             section_regex: Regex::new(r"^\[([^\]]+)\]$").unwrap(),
             directive_regex: Regex::new(r"^([^=]+)=(.*)$").unwrap(),
         }
     }
+}
 
+impl SystemdParser {
     pub fn parse(&self, text: &str) -> SystemdUnit {
         trace!("Parsing systemd unit file ({} characters)", text.len());
         let mut unit = SystemdUnit {
@@ -72,49 +111,52 @@ impl SystemdParser {
 
             if let Some(captures) = self.section_regex.captures(trimmed) {
                 if let Some(section_name) = current_section.take() {
-                    if let Some(section) = unit.sections.get_mut(&section_name) {
-                        section.line_range.1 = line_num - 1;
+                    if let Some(range) = unit
+                        .sections
+                        .get_mut(&section_name)
+                        .and_then(|section| section.line_ranges.last_mut())
+                    {
+                        range.1 = line_num - 1;
                     }
                 }
 
                 let section_name = captures[1].to_string();
                 current_section = Some(section_name.clone());
 
-                unit.sections.insert(
-                    section_name.clone(),
-                    SystemdSection {
+                unit.sections
+                    .entry(section_name.clone())
+                    .or_insert_with(|| SystemdSection {
                         name: section_name,
                         directives: Vec::new(),
-                        line_range: (line_num, line_num),
-                    },
-                );
+                        line_ranges: Vec::new(),
+                    })
+                    .line_ranges
+                    .push((line_num, line_num));
             } else if let Some(captures) = self.directive_regex.captures(trimmed) {
                 if let Some(section_name) = &current_section {
                     let key = captures[1].trim().to_string();
                     let raw_value = captures[2].to_string();
 
-                    let key_start = line.find(&key).unwrap_or(0) as u32;
-                    let key_end = key_start + key.len() as u32;
+                    // Byte offsets into `line`, converted to UTF-16 columns for the protocol.
+                    let key_start_byte = line.find(&key).unwrap_or(0);
+                    let key_end_byte = key_start_byte + key.len();
+                    let key_start = utf16_len(&line[..key_start_byte]);
+                    let key_end = utf16_len(&line[..key_end_byte]);
 
-                    let eq_index = line.find('=').map(|idx| idx as u32);
-                    let mut value_start = eq_index.unwrap_or(key_end) + 1;
-                    let after_eq = if let Some(eq_idx) = line.find('=') {
-                        &line[eq_idx + 1..]
-                    } else {
-                        ""
-                    };
-                    let leading_ws = after_eq.chars().take_while(|c| c.is_whitespace()).count();
-                    value_start += leading_ws as u32;
+                    let after_eq_byte = line.find('=').map_or(key_end_byte, |idx| idx + 1);
+                    let after_eq = &line[after_eq_byte..];
+                    let value_start_byte =
+                        after_eq_byte + (after_eq.len() - after_eq.trim_start().len());
+                    let value_start = utf16_len(&line[..value_start_byte]);
 
                     let (mut fragment, mut continuation) = parse_value_fragment(&raw_value);
                     let mut normalized_value = fragment.clone();
                     let mut value_spans = Vec::new();
 
-                    let first_span_end = value_start + fragment.len() as u32;
                     value_spans.push(DirectiveValueSpan {
                         line: line_num,
                         start: value_start,
-                        end: first_span_end,
+                        end: value_start + utf16_len(&fragment),
                     });
 
                     let mut end_line_number = line_num;
@@ -124,7 +166,8 @@ impl SystemdParser {
                             let next_line_trimmed = next_line.trim();
                             end_line_number = next_line_num as u32;
 
-                            let indent = next_line.find(next_line_trimmed).unwrap_or(0) as u32;
+                            let indent_byte = next_line.find(next_line_trimmed).unwrap_or(0);
+                            let indent = utf16_len(&next_line[..indent_byte]);
 
                             let (next_fragment, next_continuation) =
                                 parse_value_fragment(next_line_trimmed);
@@ -141,7 +184,7 @@ impl SystemdParser {
                             value_spans.push(DirectiveValueSpan {
                                 line: end_line_number,
                                 start: indent,
-                                end: indent + next_fragment.len() as u32,
+                                end: indent + utf16_len(&next_fragment),
                             });
 
                             continuation = next_continuation;
@@ -168,7 +211,7 @@ impl SystemdParser {
                         value_spans.push(DirectiveValueSpan {
                             line: line_num,
                             start: value_start,
-                            end: value_start + normalized_value.len() as u32,
+                            end: value_start + utf16_len(&normalized_value),
                         });
                     }
 
@@ -189,8 +232,12 @@ impl SystemdParser {
         }
 
         if let Some(section_name) = current_section {
-            if let Some(section) = unit.sections.get_mut(&section_name) {
-                section.line_range.1 = text.lines().count() as u32;
+            if let Some(range) = unit
+                .sections
+                .get_mut(&section_name)
+                .and_then(|section| section.line_ranges.last_mut())
+            {
+                range.1 = text.lines().count() as u32;
             }
         }
 
@@ -223,9 +270,10 @@ impl SystemdParser {
         if let Some(line) = lines.get(position.line as usize) {
             // Try to extract the word at the cursor position
             let chars: Vec<char> = line.chars().collect();
-            if position.character < chars.len() as u32 {
-                let cursor_pos = position.character as usize;
-
+            let cursor_pos = line[..utf16_to_byte(line, position.character)]
+                .chars()
+                .count();
+            if cursor_pos < chars.len() {
                 // Find word boundaries around the cursor
                 let mut start = cursor_pos;
                 let mut end = cursor_pos;
@@ -265,7 +313,7 @@ impl SystemdParser {
     ) -> Option<String> {
         debug!("Checking for section header at line {}", position.line);
         for section in unit.sections.values() {
-            if position.line == section.line_range.0 {
+            if section.is_header_line(position.line) {
                 debug!(
                     "Found section header '{}' at line {}",
                     section.name, position.line
@@ -284,7 +332,7 @@ impl SystemdParser {
     ) -> Option<&'a SystemdSection> {
         unit.sections
             .values()
-            .find(|section| line >= section.line_range.0 && line <= section.line_range.1)
+            .find(|section| section.contains_line(line))
     }
 }
 
@@ -331,7 +379,7 @@ mod tests {
         assert!(parsed.sections.contains_key("Service"));
 
         let unit_section = &parsed.sections["Unit"];
-        assert_eq!(unit_section.line_range.0, 0);
+        assert_eq!(unit_section.line_ranges[0].0, 0);
         assert_eq!(unit_section.directives.len(), 2);
         assert!(unit_section
             .directives
@@ -345,7 +393,7 @@ mod tests {
             .is_some());
 
         let service_section = &parsed.sections["Service"];
-        assert_eq!(service_section.line_range.0, 4);
+        assert_eq!(service_section.line_ranges[0].0, 4);
         assert_eq!(service_section.directives.len(), 2);
         assert!(service_section
             .directives
@@ -693,5 +741,72 @@ mod tests {
         assert_eq!(third_span.line, 3);
         assert_eq!(third_span.start, 4);
         assert_eq!(third_span.end, 18);
+    }
+
+    #[test]
+    fn test_repeated_sections_are_merged() {
+        let parser = SystemdParser::new();
+        let content = "[Service]\nExecStart=\n\n[Unit]\nDescription=x\n\n[Service]\nType=simple\n";
+        let parsed = parser.parse(content);
+
+        let service = &parsed.sections["Service"];
+        let keys: Vec<&str> = service.directives.iter().map(|d| d.key.as_str()).collect();
+        assert_eq!(keys, ["ExecStart", "Type"]);
+        assert_eq!(service.line_ranges, [(0, 2), (6, 8)]);
+
+        assert_eq!(
+            parser.get_section_at_line(&parsed, 1).unwrap().name,
+            "Service"
+        );
+        assert_eq!(parser.get_section_at_line(&parsed, 4).unwrap().name, "Unit");
+        assert_eq!(
+            parser.get_section_at_line(&parsed, 7).unwrap().name,
+            "Service"
+        );
+        assert_eq!(
+            parser.get_section_header_at_position(&parsed, &Position::new(6, 0)),
+            Some("Service".to_string())
+        );
+    }
+
+    #[test]
+    fn test_columns_are_utf16() {
+        let parser = SystemdParser::new();
+        // "é" is 2 bytes / 1 UTF-16 unit; "😀" is 4 bytes / 2 UTF-16 units.
+        let content = "[Unit]\nDescription=é 😀 x\n[Service]\nExecStart=/bin/a \\\n  ü \\\n  b\n";
+        let parsed = parser.parse(content);
+
+        let description = &parsed.sections["Unit"].directives[0];
+        assert_eq!(description.column_range, (0, 11));
+        assert_eq!(description.value_spans[0].start, 12);
+        assert_eq!(description.value_spans[0].end, 12 + 6);
+
+        let exec_start = &parsed.sections["Service"].directives[0];
+        let spans: Vec<(u32, u32, u32)> = exec_start
+            .value_spans
+            .iter()
+            .map(|span| (span.line, span.start, span.end))
+            .collect();
+        assert_eq!(spans, [(3, 10, 16), (4, 2, 3), (5, 2, 3)]);
+    }
+
+    #[test]
+    fn test_get_word_at_position_uses_utf16_columns() {
+        let parser = SystemdParser::new();
+        // Each emoji is 1 char but 2 UTF-16 units, so "y" is at UTF-16 column 19
+        // while the line is only 18 chars long.
+        let parsed = parser.parse("[Unit]\nDescription=\u{1F600}\u{1F600} x y\n");
+        let word = parser.get_word_at_position(&parsed, &Position::new(1, 19));
+        assert_eq!(word, Some("y".to_string()));
+    }
+
+    #[test]
+    fn test_utf16_to_byte() {
+        let line = "aé😀b";
+        assert_eq!(utf16_to_byte(line, 0), 0);
+        assert_eq!(utf16_to_byte(line, 1), 1);
+        assert_eq!(utf16_to_byte(line, 2), 3);
+        assert_eq!(utf16_to_byte(line, 4), 7);
+        assert_eq!(utf16_to_byte(line, 99), line.len());
     }
 }

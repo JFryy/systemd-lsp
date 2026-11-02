@@ -1,5 +1,5 @@
 use crate::constants::SystemdConstants;
-use crate::parser::{DirectiveValueSpan, SystemdSection, SystemdUnit};
+use crate::parser::{utf16_len, DirectiveValueSpan, SystemdSection, SystemdUnit};
 use dashmap::DashMap;
 use log::{debug, trace};
 use std::collections::HashSet;
@@ -51,20 +51,23 @@ impl SystemdDiagnostics {
 
     fn validate_section(&self, section: &SystemdSection, diagnostics: &mut Vec<Diagnostic>) {
         if !self.valid_sections.contains(section.name.as_str()) {
-            diagnostics.push(Diagnostic {
-                range: Range::new(
-                    Position::new(section.line_range.0, 0),
-                    Position::new(section.line_range.0, section.name.len() as u32 + 2),
-                ),
-                message: format!("Unknown section: [{}]", section.name),
-                severity: Some(DiagnosticSeverity::WARNING),
-                code: None,
-                code_description: None,
-                source: None,
-                related_information: None,
-                tags: None,
-                data: None,
-            });
+            let header_width = utf16_len(&section.name) + 2;
+            for &(header_line, _) in &section.line_ranges {
+                diagnostics.push(Diagnostic {
+                    range: Range::new(
+                        Position::new(header_line, 0),
+                        Position::new(header_line, header_width),
+                    ),
+                    message: format!("Unknown section: [{}]", section.name),
+                    severity: Some(DiagnosticSeverity::WARNING),
+                    code: None,
+                    code_description: None,
+                    source: None,
+                    related_information: None,
+                    tags: None,
+                    data: None,
+                });
+            }
             return;
         }
 
@@ -210,7 +213,7 @@ mod tests {
                 SystemdSection {
                     name: section_name.to_string(),
                     directives: section_directives,
-                    line_range: (i as u32, (i + 1) as u32),
+                    line_ranges: vec![(i as u32, (i + 1) as u32)],
                 },
             );
         }

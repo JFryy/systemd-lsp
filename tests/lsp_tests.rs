@@ -20,7 +20,11 @@ mod hover_tests {
         for section in sections {
             let docs = provider.get_embedded_documentation(section);
             assert!(docs.is_some(), "{} should have docs", section);
-            assert!(docs.unwrap().len() > 100, "{} docs should be substantial", section);
+            assert!(
+                docs.unwrap().len() > 100,
+                "{} docs should be substantial",
+                section
+            );
         }
     }
 
@@ -56,13 +60,17 @@ mod hover_tests {
     #[test]
     fn unknown_directive_returns_none() {
         let completion = SystemdCompletion::new();
-        assert!(completion.get_directive_documentation("FakeDirective", "Unit").is_none());
+        assert!(completion
+            .get_directive_documentation("FakeDirective", "Unit")
+            .is_none());
     }
 
     #[test]
     fn directive_in_wrong_section_returns_none() {
         let completion = SystemdCompletion::new();
-        assert!(completion.get_directive_documentation("Type", "Unit").is_none());
+        assert!(completion
+            .get_directive_documentation("Type", "Unit")
+            .is_none());
     }
 }
 
@@ -74,7 +82,10 @@ mod parser_tests {
     fn parser_identifies_section_headers() {
         let (parser, uri) = parse_document("[Unit]\nDescription=Test\n");
         let parsed = parser.get_parsed_document(&uri).unwrap();
-        let position = Position { line: 0, character: 2 };
+        let position = Position {
+            line: 0,
+            character: 2,
+        };
 
         let section = parser.get_section_header_at_position(&parsed, &position);
         assert_eq!(section.as_deref(), Some("Unit"));
@@ -84,7 +95,10 @@ mod parser_tests {
     fn parser_extracts_directive_names() {
         let (parser, uri) = parse_document("[Unit]\nDescription=Test\n");
         let parsed = parser.get_parsed_document(&uri).unwrap();
-        let position = Position { line: 1, character: 5 };
+        let position = Position {
+            line: 1,
+            character: 5,
+        };
 
         let word = parser.get_word_at_position(&parsed, &position);
         assert_eq!(word.as_deref(), Some("Description"));
@@ -124,8 +138,21 @@ mod documentation_tests {
     fn all_documented_sections_accessible() {
         let provider = SystemdDefinitionProvider::new();
         let sections = [
-            "unit", "service", "install", "socket", "timer", "mount", "path", "swap",
-            "container", "pod", "volume", "network", "kube", "build", "image",
+            "unit",
+            "service",
+            "install",
+            "socket",
+            "timer",
+            "mount",
+            "path",
+            "swap",
+            "container",
+            "pod",
+            "volume",
+            "network",
+            "kube",
+            "build",
+            "image",
         ];
 
         for section in sections {
@@ -167,14 +194,22 @@ mod documentation_tests {
         let mut missing = Vec::new();
 
         for section in sections {
-            if provider.get_embedded_documentation(&section.to_lowercase()).is_none() {
+            if provider
+                .get_embedded_documentation(&section.to_lowercase())
+                .is_none()
+            {
                 missing.push(section);
             }
         }
 
         let total = SystemdConstants::valid_sections().len();
         let coverage = ((total - missing.len()) as f64 / total as f64) * 100.0;
-        println!("\nSection Coverage: {}/{} ({:.1}%)", total - missing.len(), total, coverage);
+        println!(
+            "\nSection Coverage: {}/{} ({:.1}%)",
+            total - missing.len(),
+            total,
+            coverage
+        );
 
         if !missing.is_empty() {
             println!("Missing sections:");
@@ -198,14 +233,22 @@ mod documentation_tests {
         for (section, dir_list) in directives.iter() {
             for directive in dir_list.iter() {
                 total += 1;
-                if completion.get_directive_documentation(directive, section).is_none() {
+                if completion
+                    .get_directive_documentation(directive, section)
+                    .is_none()
+                {
                     missing.push(format!("{}/{}", section, directive));
                 }
             }
         }
 
         let coverage = ((total - missing.len()) as f64 / total as f64) * 100.0;
-        println!("\nDirective Coverage: {}/{} ({:.1}%)", total - missing.len(), total, coverage);
+        println!(
+            "\nDirective Coverage: {}/{} ({:.1}%)",
+            total - missing.len(),
+            total,
+            coverage
+        );
 
         if !missing.is_empty() {
             println!("Missing ({}):", missing.len());

@@ -7,11 +7,30 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        components: rustfmt, clippy
+    - uses: Swatinem/rust-cache@v2
+    - name: Check formatting
+      run: cargo fmt --all -- --check
+    - name: Clippy
+      run: cargo clippy --all-targets --locked -- -D warnings
+
   test-and-build:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
+    - uses: Swatinem/rust-cache@v2
     - name: Run tests and build
       run: make build
 
