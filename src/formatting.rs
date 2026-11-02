@@ -1,7 +1,7 @@
 use log::{debug, trace};
 use tower_lsp_server::ls_types::{Position, Range, TextEdit, Uri};
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct SystemdFormatter;
 
 impl SystemdFormatter {

@@ -45,7 +45,7 @@ impl SystemdDefinitionProvider {
         Self { shared_temp_file }
     }
 
-    pub async fn get_definition(
+    pub fn get_definition(
         &self,
         parser: &SystemdParser,
         uri: &Uri,
@@ -69,7 +69,7 @@ impl SystemdDefinitionProvider {
         // Only handle section headers for go-to definition
         if let Some(section_name) = parser.get_section_header_at_position(&parsed, position) {
             debug!("Found section header '{}' at position", section_name);
-            return self.get_section_man_page_definition(&section_name).await;
+            return self.get_section_man_page_definition(&section_name);
         } else {
             debug!(
                 "No section header found at position {}:{}",
@@ -80,20 +80,19 @@ impl SystemdDefinitionProvider {
         None
     }
 
-    async fn get_section_man_page_definition(
+    /// Section documentation, matched case-insensitively.
+    fn find_section_documentation(section_name: &str) -> Option<&'static str> {
+        SystemdConstants::section_documentation()
+            .iter()
+            .find(|(key, _)| key.eq_ignore_ascii_case(section_name))
+            .map(|(_, &content)| content)
+    }
+
+    fn get_section_man_page_definition(
         &self,
         section_name: &str,
     ) -> Option<GotoDefinitionResponse> {
-        let docs = SystemdConstants::section_documentation();
-
-        // Try to find documentation (case-insensitive)
-        let content = docs.iter().find_map(|(key, value)| {
-            if key.eq_ignore_ascii_case(section_name) {
-                Some(*value)
-            } else {
-                None
-            }
-        });
+        let content = Self::find_section_documentation(section_name);
 
         // Update the shared temp file with the requested section's documentation
         if let Some(temp_file) = &self.shared_temp_file {
@@ -104,19 +103,7 @@ impl SystemdDefinitionProvider {
                         section_name
                     );
                     if let Some(uri) = Uri::from_file_path(temp_file) {
-                        let location = Location {
-                            uri,
-                            range: Range {
-                                start: Position {
-                                    line: 0,
-                                    character: 0,
-                                },
-                                end: Position {
-                                    line: 0,
-                                    character: 0,
-                                },
-                            },
-                        };
+                        let location = Location::new(uri, Range::default());
                         return Some(GotoDefinitionResponse::Scalar(location));
                     }
                 }
@@ -128,15 +115,8 @@ impl SystemdDefinitionProvider {
     }
 
     /// Get embedded documentation for a section
-    pub fn get_embedded_documentation(&self, section_key: &str) -> Option<String> {
-        let docs = SystemdConstants::section_documentation();
-        docs.iter().find_map(|(key, value)| {
-            if key.eq_ignore_ascii_case(section_key) {
-                Some(value.to_string())
-            } else {
-                None
-            }
-        })
+    pub fn get_embedded_documentation(&self, section_key: &str) -> Option<&'static str> {
+        Self::find_section_documentation(section_key)
     }
 
     /// Clean up temporary documentation files
@@ -188,37 +168,27 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn test_get_definition_for_valid_section() {
+    #[test]
+    fn test_get_definition_for_valid_section() {
         let provider = SystemdDefinitionProvider::new();
         let parser = SystemdParser::new();
-
-        // Create a test systemd file
         let content = "[Unit]\nDescription=Test service\n\n[Service]\nType=simple\n";
-        let _parsed = parser.parse(content);
         let uri = "file:///test.service".parse::<Uri>().unwrap();
-
-        // Store the parsed document
         parser.update_document(&uri, content);
 
-        // Test definition for Unit section (line 0)
-        let position = Position {
-            line: 0,
-            character: 0,
-        };
-        let result = provider.get_definition(&parser, &uri, &position).await;
-        assert!(result.is_some());
+        let result = provider.get_definition(&parser, &uri, &Position::new(0, 0));
 
-        if let Some(GotoDefinitionResponse::Scalar(location)) = result {
-            assert!(location
-                .uri
-                .to_string()
-                .contains("systemdls-documentation.md"));
-        }
+        let Some(GotoDefinitionResponse::Scalar(location)) = result else {
+            panic!("expected a scalar location, got {result:?}");
+        };
+        assert!(location
+            .uri
+            .to_string()
+            .contains("systemdls-documentation.md"));
     }
 
-    #[tokio::test]
-    async fn test_get_definition_for_invalid_position() {
+    #[test]
+    fn test_get_definition_for_invalid_position() {
         let provider = SystemdDefinitionProvider::new();
         let parser = SystemdParser::new();
 
@@ -226,17 +196,13 @@ mod tests {
         let uri = "file:///test.service".parse::<Uri>().unwrap();
         parser.update_document(&uri, content);
 
-        // Test position not on a section header (line 1)
-        let position = Position {
-            line: 1,
-            character: 0,
-        };
-        let result = provider.get_definition(&parser, &uri, &position).await;
+        // Line 1 is not a section header
+        let result = provider.get_definition(&parser, &uri, &Position::new(1, 0));
         assert!(result.is_none());
     }
 
-    #[tokio::test]
-    async fn test_get_definition_for_unknown_section() {
+    #[test]
+    fn test_get_definition_for_unknown_section() {
         let provider = SystemdDefinitionProvider::new();
         let parser = SystemdParser::new();
 
@@ -245,16 +211,12 @@ mod tests {
         let uri = "file:///test.service".parse::<Uri>().unwrap();
         parser.update_document(&uri, content);
 
-        let position = Position {
-            line: 0,
-            character: 0,
-        };
-        let result = provider.get_definition(&parser, &uri, &position).await;
+        let result = provider.get_definition(&parser, &uri, &Position::new(0, 0));
         assert!(result.is_none());
     }
 
-    #[tokio::test]
-    async fn test_get_definition_case_insensitive() {
+    #[test]
+    fn test_get_definition_case_insensitive() {
         let provider = SystemdDefinitionProvider::new();
         let parser = SystemdParser::new();
 
@@ -268,11 +230,7 @@ mod tests {
                 .unwrap();
             parser.update_document(&uri, &content);
 
-            let position = Position {
-                line: 0,
-                character: 0,
-            };
-            let result = provider.get_definition(&parser, &uri, &position).await;
+            let result = provider.get_definition(&parser, &uri, &Position::new(0, 0));
             assert!(
                 result.is_some(),
                 "Failed for section header: {}",

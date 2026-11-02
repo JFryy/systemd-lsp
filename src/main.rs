@@ -3,24 +3,13 @@ use log::{debug, info, trace, warn};
 use std::env;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
+use systemd_lsp::{
+    SystemdCompletion, SystemdDefinitionProvider, SystemdDiagnostics, SystemdFormatter,
+    SystemdParser, SystemdSemanticTokens,
+};
 use tower_lsp_server::jsonrpc::Result;
 use tower_lsp_server::ls_types::*;
 use tower_lsp_server::{Client, LanguageServer, LspService, Server};
-
-mod completion;
-mod constants;
-mod definition;
-mod diagnostics;
-mod formatting;
-mod parser;
-mod semantic_tokens;
-
-use completion::SystemdCompletion;
-use definition::SystemdDefinitionProvider;
-use diagnostics::SystemdDiagnostics;
-use formatting::SystemdFormatter;
-use parser::SystemdParser;
-use semantic_tokens::SystemdSemanticTokens;
 
 #[derive(Debug)]
 pub struct SystemdLanguageServer {
@@ -156,10 +145,7 @@ impl LanguageServer for SystemdLanguageServer {
             position.line, position.character, uri
         );
 
-        let result = self
-            .completion
-            .get_completions(&self.parser, uri, position)
-            .await;
+        let result = self.completion.get_completions(&self.parser, uri, position);
         let count = result.as_ref().map_or(0, |r| match r {
             CompletionResponse::Array(items) => items.len(),
             CompletionResponse::List(list) => list.items.len(),
@@ -188,7 +174,7 @@ impl LanguageServer for SystemdLanguageServer {
             )
             .await;
 
-        let result = self.get_hover_info(uri, position).await;
+        let result = self.get_hover_info(uri, position);
 
         if result.is_some() {
             debug!("Hover info found and returned");
@@ -251,8 +237,7 @@ impl LanguageServer for SystemdLanguageServer {
 
         let result = self
             .definition_provider
-            .get_definition(&self.parser, uri, position)
-            .await;
+            .get_definition(&self.parser, uri, position);
 
         if result.is_some() {
             debug!("Definition found and returned");
@@ -296,13 +281,11 @@ impl SystemdLanguageServer {
         debug!("Processing document change for {:?}", params.uri);
         trace!("Document text length: {} characters", params.text.len());
 
-        let parsed = self.parser.parse(&params.text);
+        let parsed = self.parser.update_document(&params.uri, &params.text);
         debug!("Document parsed, found {} sections", parsed.sections.len());
 
-        self.parser.update_document(&params.uri, &params.text);
-        self.diagnostics.update(&params.uri, parsed).await;
-
-        let diagnostics = self.diagnostics.get_diagnostics(&params.uri).await;
+        self.diagnostics.update(&params.uri, &parsed);
+        let diagnostics = self.diagnostics.get_diagnostics(&params.uri);
         debug!(
             "Publishing {} diagnostics for {:?}",
             diagnostics.len(),
@@ -314,7 +297,7 @@ impl SystemdLanguageServer {
             .await;
     }
 
-    async fn get_hover_info(&self, uri: &Uri, position: &Position) -> Option<Hover> {
+    fn get_hover_info(&self, uri: &Uri, position: &Position) -> Option<Hover> {
         trace!(
             "Getting hover info for {}:{} in {:?}",
             position.line,
@@ -337,7 +320,7 @@ impl SystemdLanguageServer {
                 return Some(Hover {
                     contents: HoverContents::Markup(MarkupContent {
                         kind: MarkupKind::Markdown,
-                        value: Self::truncate_documentation(&full_docs),
+                        value: Self::truncate_documentation(full_docs),
                     }),
                     range: None,
                 });
@@ -545,7 +528,7 @@ fn is_systemd_file(path: &Path) -> bool {
 }
 
 /// Run diagnostics on files in CLI mode
-async fn run_cli_diagnostics(paths: Vec<PathBuf>, recursive: bool) -> std::io::Result<i32> {
+fn run_cli_diagnostics(paths: Vec<PathBuf>, recursive: bool) -> std::io::Result<i32> {
     let files = collect_files(&paths, recursive)?;
 
     if files.is_empty() {
@@ -568,13 +551,7 @@ async fn run_cli_diagnostics(paths: Vec<PathBuf>, recursive: bool) -> std::io::R
             }
         };
 
-        let uri = format!("file://{}", file_path.display())
-            .parse::<Uri>()
-            .unwrap();
-
-        let parsed = parser.parse(&content);
-        diagnostics_engine.update(&uri, parsed).await;
-        let diags = diagnostics_engine.get_diagnostics(&uri).await;
+        let diags = diagnostics_engine.diagnose(&parser.parse(&content));
 
         if !diags.is_empty() {
             files_with_issues += 1;
@@ -683,7 +660,7 @@ async fn main() {
         let cli = Cli::parse();
 
         // Run CLI diagnostics mode
-        match run_cli_diagnostics(cli.paths, cli.recursive).await {
+        match run_cli_diagnostics(cli.paths, cli.recursive) {
             Ok(exit_code) => std::process::exit(exit_code),
             Err(e) => {
                 eprintln!("Error: {}", e);
@@ -804,28 +781,25 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn test_integrated_parsing_and_diagnostics() {
+    #[test]
+    fn test_integrated_parsing_and_diagnostics() {
         // Test that parser and diagnostics work together
         let parser = SystemdParser::new();
         let diagnostics = SystemdDiagnostics::new();
         let uri: Uri = "file:///test.service".parse().unwrap();
 
         // Test with valid content
-        let content = "[Service]\nType=simple";
-        let parsed = parser.parse(content);
-        parser.update_document(&uri, content);
-        diagnostics.update(&uri, parsed).await;
+        let parsed = parser.update_document(&uri, "[Service]\nType=simple");
+        diagnostics.update(&uri, &parsed);
 
-        let diags = diagnostics.get_diagnostics(&uri).await;
+        let diags = diagnostics.get_diagnostics(&uri);
         assert_eq!(diags.len(), 0, "Valid content should have no diagnostics");
 
         // Test with invalid content
-        let invalid_content = "[InvalidSection]\nInvalidDirective=value";
-        let parsed = parser.parse(invalid_content);
-        diagnostics.update(&uri, parsed).await;
+        let parsed = parser.update_document(&uri, "[InvalidSection]\nInvalidDirective=value");
+        diagnostics.update(&uri, &parsed);
 
-        let diags = diagnostics.get_diagnostics(&uri).await;
+        let diags = diagnostics.get_diagnostics(&uri);
         assert!(!diags.is_empty(), "Invalid content should have diagnostics");
     }
 
@@ -845,8 +819,8 @@ mod tests {
         assert!(service.inner().parser.get_parsed_document(&uri).is_none());
     }
 
-    #[tokio::test]
-    async fn test_integrated_parsing_and_completion() {
+    #[test]
+    fn test_integrated_parsing_and_completion() {
         // Test that parser and completion work together
         let parser = SystemdParser::new();
         let completion = SystemdCompletion::new();
@@ -856,12 +830,7 @@ mod tests {
         parser.update_document(&uri, content);
 
         // Test completion after "Type="
-        let position = Position {
-            line: 1,
-            character: 5,
-        };
-
-        let completions = completion.get_completions(&parser, &uri, &position).await;
+        let completions = completion.get_completions(&parser, &uri, &Position::new(1, 5));
         assert!(completions.is_some(), "Should provide completions");
     }
 
@@ -912,7 +881,7 @@ mod tests {
     #[test]
     fn test_constants_validation() {
         // Test that constants module has valid data
-        let sections = constants::SystemdConstants::valid_sections();
+        let sections = systemd_lsp::SystemdConstants::valid_sections();
         assert!(!sections.is_empty(), "Should have valid sections");
         assert!(sections.contains(&"Unit"), "Should include Unit section");
         assert!(
@@ -921,7 +890,7 @@ mod tests {
         );
 
         // Verify section directives exist
-        let section_directives = constants::SystemdConstants::section_directives();
+        let section_directives = systemd_lsp::SystemdConstants::section_directives();
         assert!(
             !section_directives.is_empty(),
             "Should have section directives"

@@ -1,19 +1,32 @@
 use std::collections::HashMap;
+use std::sync::OnceLock;
 
 pub struct SystemdConstants;
 
+/// Lookup tables are built on first use and shared for the life of the process.
+macro_rules! cached {
+    ($ty:ty, $build:expr) => {{
+        static CELL: OnceLock<$ty> = OnceLock::new();
+        CELL.get_or_init($build)
+    }};
+}
+
 impl SystemdConstants {
-    pub fn valid_sections() -> Vec<&'static str> {
-        include_str!("../docs/sections.txt").lines().collect()
+    pub fn valid_sections() -> &'static [&'static str] {
+        cached!(Vec<&'static str>, || include_str!("../docs/sections.txt")
+            .lines()
+            .collect())
     }
 
-    /*
-    // Lists containing valid directives for each section
-    // this is stored in docs and _should_ be generated from
-    // from the parent documentation to keep it up to date
-    // and not prone to human error.
-     */
-    pub fn section_directives() -> HashMap<&'static str, Vec<&'static str>> {
+    /// Valid directives for each section, generated from the systemd documentation.
+    pub fn section_directives() -> &'static HashMap<&'static str, Vec<&'static str>> {
+        cached!(
+            HashMap<&'static str, Vec<&'static str>>,
+            Self::build_section_directives
+        )
+    }
+
+    fn build_section_directives() -> HashMap<&'static str, Vec<&'static str>> {
         let mut map = HashMap::new();
 
         map.insert(
@@ -138,7 +151,15 @@ impl SystemdConstants {
         map
     }
 
-    pub fn directive_descriptions() -> HashMap<(&'static str, &'static str), &'static str> {
+    pub fn directive_descriptions() -> &'static HashMap<(&'static str, &'static str), &'static str>
+    {
+        cached!(
+            HashMap<(&'static str, &'static str), &'static str>,
+            Self::build_directive_descriptions
+        )
+    }
+
+    fn build_directive_descriptions() -> HashMap<(&'static str, &'static str), &'static str> {
         let mut map = HashMap::new();
 
         // Unit directives
@@ -170,7 +191,14 @@ impl SystemdConstants {
         map
     }
 
-    pub fn valid_values() -> HashMap<&'static str, &'static [&'static str]> {
+    pub fn valid_values() -> &'static HashMap<&'static str, &'static [&'static str]> {
+        cached!(
+            HashMap<&'static str, &'static [&'static str]>,
+            Self::build_valid_values
+        )
+    }
+
+    fn build_valid_values() -> HashMap<&'static str, &'static [&'static str]> {
         let mut map = HashMap::new();
 
         // Note: Type= is now handled context-sensitively in valid_values_for_section()
@@ -274,15 +302,18 @@ impl SystemdConstants {
                 "tmpfs", "proc", "sysfs", "devpts", "nfs", "nfs4", "cifs", "sshfs", "bind",
                 "overlay", "squashfs", "fuse", "none", "auto",
             ]),
-            _ => {
-                // Fall back to global valid_values for other directives
-                let global_values = Self::valid_values();
-                global_values.get(directive).copied()
-            }
+            _ => Self::valid_values().get(directive).copied(),
         }
     }
 
-    pub fn section_documentation() -> HashMap<&'static str, &'static str> {
+    pub fn section_documentation() -> &'static HashMap<&'static str, &'static str> {
+        cached!(
+            HashMap<&'static str, &'static str>,
+            Self::build_section_documentation
+        )
+    }
+
+    fn build_section_documentation() -> HashMap<&'static str, &'static str> {
         let mut map = HashMap::new();
 
         // Use comprehensive markdown files for detailed documentation
@@ -311,28 +342,25 @@ impl SystemdConstants {
 
     /// Get shared documentation files (exec, kill, resource-control)
     /// These contain directives that are shared across multiple section types
-    pub fn shared_documentation() -> HashMap<&'static str, &'static str> {
-        let mut map = HashMap::new();
-        map.insert("exec", include_str!("../docs/exec.md"));
-        map.insert("kill", include_str!("../docs/kill.md"));
-        map.insert(
-            "resource-control",
-            include_str!("../docs/resource-control.md"),
-        );
-        map
+    pub fn shared_documentation() -> &'static HashMap<&'static str, &'static str> {
+        cached!(HashMap<&'static str, &'static str>, || HashMap::from([
+            ("exec", include_str!("../docs/exec.md")),
+            ("kill", include_str!("../docs/kill.md")),
+            (
+                "resource-control",
+                include_str!("../docs/resource-control.md"),
+            ),
+        ]))
     }
 
     /// Returns the list of shared documentation keys that apply to a given section
     /// This mapping determines which additional directive sets are available in each section
-    pub fn section_shared_docs(section: &str) -> Vec<&'static str> {
+    pub fn section_shared_docs(section: &str) -> &'static [&'static str] {
         match section.to_lowercase().as_str() {
-            "service" => vec!["exec", "kill", "resource-control"],
-            "socket" => vec!["exec", "kill", "resource-control"],
-            "mount" => vec!["exec", "kill", "resource-control"],
-            "swap" => vec!["exec", "kill", "resource-control"],
-            "scope" => vec!["kill", "resource-control"],
-            "slice" => vec!["resource-control"],
-            _ => vec![],
+            "service" | "socket" | "mount" | "swap" => &["exec", "kill", "resource-control"],
+            "scope" => &["kill", "resource-control"],
+            "slice" => &["resource-control"],
+            _ => &[],
         }
     }
 

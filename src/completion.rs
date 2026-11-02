@@ -1,5 +1,5 @@
 use crate::constants::SystemdConstants;
-use crate::parser::{utf16_len, utf16_to_byte, SystemdParser};
+use crate::parser::{utf16_len, utf16_to_byte, SystemdParser, SystemdUnit};
 use log::{debug, trace};
 use std::collections::HashMap;
 use tower_lsp_server::ls_types::{
@@ -13,11 +13,14 @@ pub struct SystemdCompletion {
     directive_completions: HashMap<String, Vec<CompletionItem>>,
 }
 
-#[derive(Debug, Clone)]
-enum CompletionContext {
+#[derive(Debug)]
+enum CompletionContext<'a> {
     SectionHeader,
-    Directive(String),
-    Value { section: String, directive: String },
+    Directive(&'a str),
+    Value {
+        section: &'a str,
+        directive: &'a str,
+    },
     Global,
 }
 
@@ -30,7 +33,7 @@ impl Default for SystemdCompletion {
 impl SystemdCompletion {
     pub fn new() -> Self {
         let mut section_completions = Vec::new();
-        for (name, description) in SystemdConstants::section_documentation() {
+        for (&name, &description) in SystemdConstants::section_documentation() {
             let documentation = Self::create_documentation(
                 &format!("[{}] Section", name),
                 description,
@@ -49,19 +52,17 @@ impl SystemdCompletion {
         let mut directive_completions = HashMap::new();
         let directive_descriptions = SystemdConstants::directive_descriptions();
 
-        for (section, directives) in SystemdConstants::section_directives() {
-            let mut completion_items = Vec::new();
-            for directive in directives {
-                let description = directive_descriptions
-                    .get(&(section, directive))
-                    .unwrap_or(&"systemd directive")
-                    .to_string();
-                completion_items.push(Self::create_directive_completion(
-                    section,
-                    directive,
-                    &description,
-                ));
-            }
+        for (&section, directives) in SystemdConstants::section_directives() {
+            let completion_items = directives
+                .iter()
+                .map(|&directive| {
+                    let description = directive_descriptions
+                        .get(&(section, directive))
+                        .copied()
+                        .unwrap_or("systemd directive");
+                    Self::create_directive_completion(section, directive, description)
+                })
+                .collect();
             directive_completions.insert(section.to_string(), completion_items);
         }
 
@@ -71,7 +72,7 @@ impl SystemdCompletion {
         }
     }
 
-    pub async fn get_completions(
+    pub fn get_completions(
         &self,
         parser: &SystemdParser,
         uri: &Uri,
@@ -84,12 +85,9 @@ impl SystemdCompletion {
             uri
         );
 
-        // Get the parsed document and document text
         let unit = parser.get_parsed_document(uri)?;
-        let document_text = parser.get_document_text(uri)?;
-
-        // Determine the context at the current position
-        let completion_context = self.determine_context(parser, &unit, position, &document_text);
+        let document_text = unit.raw_text.as_str();
+        let completion_context = Self::determine_context(parser, &unit, position);
 
         debug!("Completion context: {:?}", completion_context);
 
@@ -97,7 +95,7 @@ impl SystemdCompletion {
             CompletionContext::SectionHeader => {
                 // Only show section completions
                 debug!("Providing section completions");
-                let Some(range) = Self::section_header_range(&document_text, position) else {
+                let Some(range) = Self::section_header_range(document_text, position) else {
                     return Some(CompletionResponse::Array(self.section_completions.clone()));
                 };
                 let items = self
@@ -119,7 +117,7 @@ impl SystemdCompletion {
                     "Providing directive completions for section: {}",
                     section_name
                 );
-                if let Some(directives) = self.directive_completions.get(&section_name) {
+                if let Some(directives) = self.directive_completions.get(section_name) {
                     Some(CompletionResponse::Array(directives.clone()))
                 } else {
                     debug!("No directives found for section: {}", section_name);
@@ -134,7 +132,7 @@ impl SystemdCompletion {
                     "Providing value completions for {}.{}",
                     section_name, directive
                 );
-                match self.get_value_completions(section_name.as_str(), directive.as_str()) {
+                match Self::get_value_completions(section_name, directive) {
                     Some(items) if !items.is_empty() => Some(CompletionResponse::Array(items)),
                     _ => {
                         debug!(
@@ -170,38 +168,17 @@ impl SystemdCompletion {
         ))
     }
 
-    fn determine_context(
-        &self,
+    fn determine_context<'a>(
         parser: &SystemdParser,
-        unit: &crate::parser::SystemdUnit,
+        unit: &'a SystemdUnit,
         position: &Position,
-        document_text: &str,
-    ) -> CompletionContext {
-        let lines: Vec<&str> = document_text.lines().collect();
-        let current_line_index = position.line as usize;
-
-        // Check if we're beyond the document bounds
-        if current_line_index >= lines.len() {
+    ) -> CompletionContext<'a> {
+        let Some(current_line) = unit.raw_text.lines().nth(position.line as usize) else {
             return CompletionContext::Global;
-        }
+        };
 
-        let current_line = lines[current_line_index];
-        let character_position = position.character as usize;
-
-        // Check if we're at the start of a line that begins with '[' or completing a section header
-        if character_position == 0 || current_line.trim_start().starts_with('[') {
-            // Check if the line starts with '[' - this indicates section header context
-            if current_line.trim().starts_with('[')
-                || (character_position > 0
-                    && current_line
-                        .chars()
-                        .take(character_position)
-                        .collect::<String>()
-                        .trim()
-                        .starts_with('['))
-            {
-                return CompletionContext::SectionHeader;
-            }
+        if current_line.trim_start().starts_with('[') {
+            return CompletionContext::SectionHeader;
         }
 
         // Check if we're currently on a section header line
@@ -212,16 +189,13 @@ impl SystemdCompletion {
         // Check if we're inside a section (for directive completions)
         if let Some(section) = parser.get_section_at_line(unit, position.line) {
             // Check if cursor is positioned within the value part of a directive on the same line
-            if let Some(eq_idx) = current_line.find('=') {
-                let eq_char_index = current_line[..eq_idx].chars().count() as u32;
-                if position.character > eq_char_index {
-                    let key = current_line[..eq_idx].trim();
-                    if !key.is_empty() {
-                        return CompletionContext::Value {
-                            section: section.name.clone(),
-                            directive: key.to_string(),
-                        };
-                    }
+            if let Some((raw_key, _)) = current_line.split_once('=') {
+                let key = raw_key.trim();
+                if position.character > utf16_len(raw_key) && !key.is_empty() {
+                    return CompletionContext::Value {
+                        section: &section.name,
+                        directive: key,
+                    };
                 }
             }
 
@@ -233,12 +207,12 @@ impl SystemdCompletion {
                 })
             }) {
                 return CompletionContext::Value {
-                    section: section.name.clone(),
-                    directive: directive.key.clone(),
+                    section: &section.name,
+                    directive: &directive.key,
                 };
             }
 
-            return CompletionContext::Directive(section.name.clone());
+            return CompletionContext::Directive(&section.name);
         }
 
         // Default to global context (show sections)
@@ -246,7 +220,6 @@ impl SystemdCompletion {
     }
 
     fn get_value_completions(
-        &self,
         section_name: &str,
         directive_name: &str,
     ) -> Option<Vec<CompletionItem>> {
@@ -266,8 +239,7 @@ impl SystemdCompletion {
                     .copied()
             })
             .or_else(|| {
-                let global_values = SystemdConstants::valid_values();
-                global_values
+                SystemdConstants::valid_values()
                     .keys()
                     .find(|key| key.eq_ignore_ascii_case(directive_name))
                     .copied()
@@ -393,19 +365,11 @@ impl SystemdCompletion {
 
         // If not found in the section's own docs, search in shared documentation
         // (exec, kill, resource-control) based on which section we're in
-        let shared_docs_keys = SystemdConstants::section_shared_docs(section_name);
-        if !shared_docs_keys.is_empty() {
-            let shared_docs = SystemdConstants::shared_documentation();
-            for shared_key in shared_docs_keys {
-                if let Some(shared_content) = shared_docs.get(shared_key) {
-                    if let Some(result) = search_in_markdown(shared_content, directive_name) {
-                        return Some(result);
-                    }
-                }
-            }
-        }
-
-        None
+        let shared_docs = SystemdConstants::shared_documentation();
+        SystemdConstants::section_shared_docs(section_name)
+            .iter()
+            .filter_map(|key| shared_docs.get(key))
+            .find_map(|content| search_in_markdown(content, directive_name))
     }
 
     // We also leverage the directive completion for auto complete and hover.
@@ -539,8 +503,8 @@ mod tests {
     use super::*;
     use tower_lsp_server::ls_types::{Position, Uri};
 
-    #[tokio::test]
-    async fn test_completion_creation() {
+    #[test]
+    fn test_completion_creation() {
         let completion = SystemdCompletion::new();
 
         // Test that sections are populated
@@ -552,8 +516,8 @@ mod tests {
         assert!(completion.directive_completions.contains_key("Install"));
     }
 
-    #[tokio::test]
-    async fn test_get_completions_returns_results() {
+    #[test]
+    fn test_get_completions_returns_results() {
         let completion = SystemdCompletion::new();
         let parser = SystemdParser::new();
         let uri = "file:///test.service".parse::<Uri>().unwrap();
@@ -563,7 +527,7 @@ mod tests {
         let document_text = "[Unit]\nDescription=Test\n\n[Service]\nType=simple\n";
         parser.update_document(&uri, document_text);
 
-        let result = completion.get_completions(&parser, &uri, &position).await;
+        let result = completion.get_completions(&parser, &uri, &position);
 
         assert!(result.is_some());
         if let Some(CompletionResponse::Array(items)) = result {
@@ -575,8 +539,8 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn test_completion_item_properties() {
+    #[test]
+    fn test_completion_item_properties() {
         let completion = SystemdCompletion::new();
         let parser = SystemdParser::new();
         let uri = "file:///test.service".parse::<Uri>().unwrap();
@@ -586,7 +550,7 @@ mod tests {
         let document_text = "[Unit]\nDescription=Test\n\n[Service]\nType=simple\n";
         parser.update_document(&uri, document_text);
 
-        let result = completion.get_completions(&parser, &uri, &position).await;
+        let result = completion.get_completions(&parser, &uri, &position);
 
         if let Some(CompletionResponse::Array(items)) = result {
             // Find a section completion
@@ -664,8 +628,8 @@ mod tests {
         assert!(no_doc.is_none());
     }
 
-    #[tokio::test]
-    async fn test_no_duplicate_completions() {
+    #[test]
+    fn test_no_duplicate_completions() {
         let completion = SystemdCompletion::new();
         let parser = SystemdParser::new();
         let uri = "file:///test.service".parse::<Uri>().unwrap();
@@ -675,7 +639,7 @@ mod tests {
         let document_text = "[Unit]\nDescription=Test\n\n[Service]\nType=simple\n";
         parser.update_document(&uri, document_text);
 
-        let result = completion.get_completions(&parser, &uri, &position).await;
+        let result = completion.get_completions(&parser, &uri, &position);
 
         if let Some(CompletionResponse::Array(items)) = result {
             let mut labels = std::collections::HashSet::new();
@@ -695,8 +659,8 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn test_context_aware_completions() {
+    #[test]
+    fn test_context_aware_completions() {
         let completion = SystemdCompletion::new();
         let parser = SystemdParser::new();
         let uri = "file:///test.service".parse::<Uri>().unwrap();
@@ -706,9 +670,7 @@ mod tests {
         parser.update_document(&uri, document_text);
 
         // Test completion at global level (line 0, before any sections)
-        let global_result = completion
-            .get_completions(&parser, &uri, &Position::new(0, 0))
-            .await;
+        let global_result = completion.get_completions(&parser, &uri, &Position::new(0, 0));
         if let Some(CompletionResponse::Array(items)) = global_result {
             // Should only show section completions at global level
             assert!(items.iter().any(|item| item.label == "[Unit]"));
@@ -719,9 +681,7 @@ mod tests {
         }
 
         // Test completion inside Unit section (line 1)
-        let unit_result = completion
-            .get_completions(&parser, &uri, &Position::new(1, 0))
-            .await;
+        let unit_result = completion.get_completions(&parser, &uri, &Position::new(1, 0));
         if let Some(CompletionResponse::Array(items)) = unit_result {
             // Should only show Unit section directives
             assert!(items.iter().any(|item| item.label == "Description"));
@@ -732,9 +692,7 @@ mod tests {
         }
 
         // Test completion inside Service section (line 4)
-        let service_result = completion
-            .get_completions(&parser, &uri, &Position::new(4, 0))
-            .await;
+        let service_result = completion.get_completions(&parser, &uri, &Position::new(4, 0));
         if let Some(CompletionResponse::Array(items)) = service_result {
             // Should only show Service section directives
             assert!(items.iter().any(|item| item.label == "Type"));
@@ -744,8 +702,8 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn test_section_header_completion() {
+    #[test]
+    fn test_section_header_completion() {
         let completion = SystemdCompletion::new();
         let parser = SystemdParser::new();
         let uri = "file:///test.service".parse::<Uri>().unwrap();
@@ -755,9 +713,7 @@ mod tests {
         parser.update_document(&uri, document_text);
 
         // Test completion in the middle of a section header
-        let result = completion
-            .get_completions(&parser, &uri, &Position::new(0, 3))
-            .await;
+        let result = completion.get_completions(&parser, &uri, &Position::new(0, 3));
         if let Some(CompletionResponse::Array(items)) = result {
             // Should show section completions when in a section header
             assert!(items.iter().any(|item| item.label == "[Unit]"));
@@ -768,17 +724,16 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn test_section_header_completion_replaces_typed_bracket() {
+    #[test]
+    fn test_section_header_completion_replaces_typed_bracket() {
         let completion = SystemdCompletion::new();
         let parser = SystemdParser::new();
         let uri = "file:///test.service".parse::<Uri>().unwrap();
 
         for (document_text, cursor, end) in [("[Se", 3, 3), ("[Se]", 3, 4), ("  [", 3, 3)] {
             parser.update_document(&uri, document_text);
-            let Some(CompletionResponse::Array(items)) = completion
-                .get_completions(&parser, &uri, &Position::new(0, cursor))
-                .await
+            let Some(CompletionResponse::Array(items)) =
+                completion.get_completions(&parser, &uri, &Position::new(0, cursor))
             else {
                 panic!("expected section completions for {document_text:?}");
             };
@@ -795,8 +750,8 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn test_value_completions_for_restart_directive() {
+    #[test]
+    fn test_value_completions_for_restart_directive() {
         let completion = SystemdCompletion::new();
         let parser = SystemdParser::new();
         let uri = "file:///value-test.service".parse::<Uri>().unwrap();
@@ -805,9 +760,7 @@ mod tests {
         parser.update_document(&uri, document_text);
 
         let cursor = "Restart=".chars().count() as u32;
-        let result = completion
-            .get_completions(&parser, &uri, &Position::new(1, cursor))
-            .await;
+        let result = completion.get_completions(&parser, &uri, &Position::new(1, cursor));
 
         if let Some(CompletionResponse::Array(items)) = result {
             assert!(items.iter().any(|item| item.label == "no"));
@@ -820,8 +773,8 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn test_no_value_completions_for_freeform_directive() {
+    #[test]
+    fn test_no_value_completions_for_freeform_directive() {
         let completion = SystemdCompletion::new();
         let parser = SystemdParser::new();
         let uri = "file:///value-none.service".parse::<Uri>().unwrap();
@@ -830,9 +783,7 @@ mod tests {
         parser.update_document(&uri, document_text);
 
         let cursor = "Description=".chars().count() as u32;
-        let result = completion
-            .get_completions(&parser, &uri, &Position::new(1, cursor))
-            .await;
+        let result = completion.get_completions(&parser, &uri, &Position::new(1, cursor));
 
         assert!(
             result.is_none(),
