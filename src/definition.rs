@@ -12,6 +12,12 @@ pub struct SystemdDefinitionProvider {
     shared_temp_file: Option<PathBuf>,
 }
 
+impl Default for SystemdDefinitionProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SystemdDefinitionProvider {
     pub fn new() -> Self {
         // Create a single shared temp file for all documentation
@@ -58,10 +64,7 @@ impl SystemdDefinitionProvider {
             parsed.sections.len()
         );
         for (name, section) in &parsed.sections {
-            debug!(
-                "Section '{}' at lines {}-{}",
-                name, section.line_range.0, section.line_range.1
-            );
+            debug!("Section '{}' at lines {:?}", name, section.line_ranges);
         }
 
         // Only handle section headers for go-to definition
@@ -163,14 +166,26 @@ mod tests {
 
         // Test that all expected documentation is present and not empty
         let expected_sections = vec![
-            "Unit", "Service", "Install", "Socket", "Timer",
-            "Mount", "Path", "Swap", "Automount",
-            "Slice", "Scope"
+            "Unit",
+            "Service",
+            "Install",
+            "Socket",
+            "Timer",
+            "Mount",
+            "Path",
+            "Swap",
+            "Automount",
+            "Slice",
+            "Scope",
         ];
 
         for section in expected_sections {
             assert!(docs.contains_key(section), "{} should exist", section);
-            assert!(!docs[section].is_empty(), "{} docs should not be empty", section);
+            assert!(
+                !docs[section].is_empty(),
+                "{} docs should not be empty",
+                section
+            );
         }
     }
 
@@ -277,11 +292,17 @@ mod tests {
         assert!(unit_docs.contains("[Unit]"));
 
         let service_docs = docs["Service"];
-        assert!(service_docs.len() > 100, "Service docs should be substantial");
+        assert!(
+            service_docs.len() > 100,
+            "Service docs should be substantial"
+        );
         assert!(service_docs.contains("[Service]"));
 
         let install_docs = docs["Install"];
-        assert!(install_docs.len() > 100, "Install docs should be substantial");
+        assert!(
+            install_docs.len() > 100,
+            "Install docs should be substantial"
+        );
         assert!(install_docs.contains("[Install]"));
     }
 }

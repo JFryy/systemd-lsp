@@ -7,7 +7,7 @@ static INIT: Once = Once::new();
 fn ensure_binary_built() {
     INIT.call_once(|| {
         let status = Command::new("cargo")
-            .args(&["build", "--release"])
+            .args(["build", "--release"])
             .status()
             .expect("Failed to build systemd-lsp");
         assert!(status.success(), "Failed to build binary");
@@ -111,16 +111,15 @@ fn test_cli_valid_service_file() {
 
     // Should show success message
     assert!(stdout.contains("✓"), "Should show success indicator");
-    assert!(
-        stdout.contains("valid"),
-        "Should indicate files are valid"
-    );
+    assert!(stdout.contains("valid"), "Should indicate files are valid");
 }
 
 #[test]
 fn test_cli_multiple_files() {
-    let (stdout, _stderr, exit_code) =
-        run_systemd_lsp(&["examples/example.service", "examples/example-with-errors.service"]);
+    let (stdout, _stderr, exit_code) = run_systemd_lsp(&[
+        "examples/example.service",
+        "examples/example-with-errors.service",
+    ]);
 
     // Should exit with code 1 (at least one file has errors)
     assert_eq!(
@@ -164,10 +163,7 @@ fn test_cli_warnings_only() {
 
     // Should show warning indicator
     assert!(stdout.contains("⚠"), "Should show warning indicator");
-    assert!(
-        stdout.contains("warning"),
-        "Should mention warnings"
-    );
+    assert!(stdout.contains("warning"), "Should mention warnings");
 
     // Should not show error indicator
     assert!(!stdout.contains("✗"), "Should not show error indicator");
@@ -212,7 +208,9 @@ fn test_expected_error_count() {
     // Count the number of error/warning lines
     let diagnostic_lines: Vec<&str> = stdout
         .lines()
-        .filter(|line| line.contains("error") || line.contains("warning") || line.contains("unknown"))
+        .filter(|line| {
+            line.contains("error") || line.contains("warning") || line.contains("unknown")
+        })
         .collect();
 
     // We expect 9 diagnostics total (6 errors + 3 warnings)

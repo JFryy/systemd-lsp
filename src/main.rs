@@ -1,5 +1,5 @@
 use clap::Parser;
-use log::{debug, info, trace};
+use log::{debug, info, trace, warn};
 use std::env;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
@@ -115,9 +115,18 @@ impl LanguageServer for SystemdLanguageServer {
         );
         trace!("Content changes: {} items", params.content_changes.len());
 
+        // With full sync the last change carries the whole document.
+        let Some(change) = params.content_changes.pop() else {
+            warn!(
+                "Ignoring change notification with no content for {:?}",
+                params.text_document.uri
+            );
+            return;
+        };
+
         self.on_change(TextDocumentItem {
             uri: params.text_document.uri,
-            text: std::mem::take(&mut params.content_changes[0].text),
+            text: change.text,
             version: params.text_document.version,
             language_id: "systemd".to_string(),
         })
@@ -403,7 +412,9 @@ impl SystemdLanguageServer {
         }
 
         // Add ellipsis to indicate truncation
-        result.push_str("\n\n---\n*Documentation truncated. Use 'Go to Definition' for full details.*");
+        result.push_str(
+            "\n\n---\n*Documentation truncated. Use 'Go to Definition' for full details.*",
+        );
         result
     }
 
@@ -488,7 +499,12 @@ fn collect_files_recursive(
                         files.push(entry_path);
                     } else if entry_path.is_dir() {
                         // Recursively collect from subdirectories with incremented depth
-                        files.extend(collect_files_recursive(&[entry_path], true, depth + 1, max_depth)?);
+                        files.extend(collect_files_recursive(
+                            &[entry_path],
+                            true,
+                            depth + 1,
+                            max_depth,
+                        )?);
                     }
                 }
             } else {
@@ -752,7 +768,10 @@ mod tests {
 
         let edits = formatter.format_document(&uri, content);
         // Formatter should produce edits for the extra blank lines
-        assert!(edits.len() > 0 || edits.is_empty(), "Formatter should work");
+        assert!(
+            !edits.is_empty(),
+            "Formatter should produce edits for the extra blank lines"
+        );
     }
 
     #[test]
@@ -807,7 +826,23 @@ mod tests {
         diagnostics.update(&uri, parsed).await;
 
         let diags = diagnostics.get_diagnostics(&uri).await;
-        assert!(diags.len() > 0, "Invalid content should have diagnostics");
+        assert!(!diags.is_empty(), "Invalid content should have diagnostics");
+    }
+
+    #[tokio::test]
+    async fn test_did_change_without_content_changes_is_ignored() {
+        let (service, _socket) = LspService::new(SystemdLanguageServer::new);
+        let uri: Uri = "file:///test.service".parse().unwrap();
+
+        service
+            .inner()
+            .did_change(DidChangeTextDocumentParams {
+                text_document: VersionedTextDocumentIdentifier::new(uri.clone(), 2),
+                content_changes: Vec::new(),
+            })
+            .await;
+
+        assert!(service.inner().parser.get_parsed_document(&uri).is_none());
     }
 
     #[tokio::test]
