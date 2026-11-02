@@ -1,5 +1,5 @@
 use crate::parser::{SystemdParser, SystemdUnit};
-use tower_lsp_server::lsp_types::{SemanticToken, SemanticTokens, SemanticTokensLegend, Uri};
+use tower_lsp_server::ls_types::{SemanticToken, SemanticTokens, SemanticTokensLegend, Uri};
 
 const TOKEN_TYPES: &[&str] = &["keyword", "string"];
 pub(crate) const TOKEN_TYPE_KEYWORD: u32 = 0;
@@ -126,7 +126,7 @@ impl SystemdSemanticTokens {
 mod tests {
     use super::*;
     use crate::parser::SystemdParser;
-    use tower_lsp_server::lsp_types::Uri;
+    use tower_lsp_server::ls_types::Uri;
 
     #[test]
     fn test_multiline_execstart_tokens_cover_all_lines() {

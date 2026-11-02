@@ -1,7 +1,6 @@
 use log::debug;
 use std::path::PathBuf;
-use tower_lsp_server::lsp_types::{GotoDefinitionResponse, Location, Position, Range, Uri};
-use tower_lsp_server::UriExt;
+use tower_lsp_server::ls_types::{GotoDefinitionResponse, Location, Position, Range, Uri};
 
 use crate::constants::SystemdConstants;
 use crate::parser::SystemdParser;
@@ -158,7 +157,7 @@ impl SystemdDefinitionProvider {
 mod tests {
     use super::*;
     use crate::parser::SystemdParser;
-    use tower_lsp_server::lsp_types::{Position, Uri};
+    use tower_lsp_server::ls_types::{Position, Uri};
 
     #[test]
     fn test_embedded_documentation_exists() {
