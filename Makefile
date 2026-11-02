@@ -1,4 +1,4 @@
-.PHONY: build test test-coverage test-section-coverage test-directive-coverage clean gen-docs gen-docs-check
+.PHONY: build test test-coverage test-section-coverage test-directive-coverage clean gen-docs gen-docs-check demo
 
 build: test
 	cargo build --release
@@ -24,6 +24,10 @@ gen-docs:
 
 gen-docs-check:
 	@cd tools/doc-sync/ && go run .
+
+demo:
+	cargo build --release
+	vhs examples/demo/demo.tape
 
 clean:
 	cargo clean
