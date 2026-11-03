@@ -302,6 +302,10 @@ impl SystemdConstants {
                 "tmpfs", "proc", "sysfs", "devpts", "nfs", "nfs4", "cifs", "sshfs", "bind",
                 "overlay", "squashfs", "fuse", "none", "auto",
             ]),
+            // KillMode= comes from systemd.kill(5), shared by these unit types.
+            ("Service" | "Socket" | "Mount" | "Swap" | "Scope", "KillMode") => {
+                Some(&["control-group", "mixed", "process", "none"])
+            }
             _ => Self::valid_values().get(directive).copied(),
         }
     }

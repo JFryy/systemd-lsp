@@ -307,6 +307,53 @@ mod tests {
     }
 
     #[test]
+    fn test_valid_killmode_values_in_all_kill_sections() {
+        for section in ["Service", "Socket", "Mount", "Swap", "Scope"] {
+            for value in ["control-group", "mixed", "process", "none"] {
+                let unit = create_test_unit(vec![(section, vec![("KillMode", value)])]);
+
+                let result = SystemdDiagnostics::new().diagnose(&unit);
+
+                assert!(
+                    result.is_empty(),
+                    "KillMode={value} in [{section}] should be valid, got {result:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_invalid_killmode_value_diagnostic() {
+        for section in ["Service", "Socket", "Mount", "Swap", "Scope"] {
+            let unit = create_test_unit(vec![(section, vec![("KillMode", "bogus")])]);
+
+            let result = SystemdDiagnostics::new().diagnose(&unit);
+
+            assert_eq!(result.len(), 1, "[{section}]");
+            assert_eq!(
+                result[0].message,
+                "Invalid KillMode value 'bogus'. Valid values: control-group, mixed, process, none"
+            );
+            assert_eq!(result[0].severity, Some(DiagnosticSeverity::ERROR));
+            // Test helper line is 1 in the first section; value starts after "KillMode=".
+            assert_eq!(
+                result[0].range,
+                Range::new(Position::new(1, 9), Position::new(1, 14))
+            );
+        }
+    }
+
+    #[test]
+    fn test_empty_killmode_value_diagnostic() {
+        let unit = create_test_unit(vec![("Service", vec![("KillMode", "")])]);
+
+        let result = SystemdDiagnostics::new().diagnose(&unit);
+
+        assert_eq!(result.len(), 1);
+        assert!(result[0].message.starts_with("Invalid KillMode value ''"));
+    }
+
+    #[test]
     fn test_multiple_diagnostics() {
         let unit = create_test_unit(vec![
             ("InvalidSection", vec![("SomeKey", "SomeValue")]),
