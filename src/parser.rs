@@ -111,7 +111,7 @@ impl SystemdParser {
             let line_num = lsp_u32(raw_line_num);
             let trimmed = line.trim();
 
-            if trimmed.is_empty() || trimmed.starts_with('#') {
+            if trimmed.is_empty() || trimmed.starts_with(['#', ';']) {
                 continue;
             }
 
@@ -418,6 +418,19 @@ mod tests {
             .iter()
             .find(|directive| directive.key == "Description")
             .is_some());
+    }
+
+    #[test]
+    fn test_parse_semicolon_comments() {
+        let parser = SystemdParser::new();
+        let content =
+            "; leading comment\n[Service]\n;Restart=always\n  ; indented comment\nType=simple\n";
+
+        let parsed = parser.parse(content);
+
+        let service_section = &parsed.sections["Service"];
+        assert_eq!(service_section.directives.len(), 1);
+        assert_eq!(service_section.directives[0].key, "Type");
     }
 
     #[test]

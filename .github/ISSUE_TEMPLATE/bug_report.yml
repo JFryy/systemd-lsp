@@ -1,0 +1,55 @@
+name: Bug report
+description: A wrong or missing diagnostic, completion, hover, formatting result, or a crash
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: systemd-lsp version
+      description: Output of `systemd-lsp --version`, or the commit you built from
+    validations:
+      required: true
+  - type: input
+    id: editor
+    attributes:
+      label: Editor and OS
+      placeholder: Neovim 0.11, Fedora 42
+    validations:
+      required: true
+  - type: dropdown
+    id: feature
+    attributes:
+      label: Affected feature
+      options:
+        - Diagnostics
+        - Completion
+        - Hover documentation
+        - Formatting
+        - Go to definition
+        - Syntax highlighting
+        - Crash or hang
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: unit
+    attributes:
+      label: Minimal unit file
+      description: The smallest unit file that reproduces the problem, including its file name (for example `foo.service` or `override.conf`)
+      render: ini
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      description: If this is about what systemd accepts, a link to the relevant man page section helps.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: Include the diagnostic message or any LSP log output
+    validations:
+      required: true
