@@ -170,6 +170,11 @@ impl SystemdParser {
                     while continuation {
                         if let Some((next_line_num, next_line)) = lines.next() {
                             let next_line_trimmed = next_line.trim();
+                            // systemd ignores # / ; comments mid-continuation and
+                            // keeps joining later lines; do not cover them in spans.
+                            if next_line_trimmed.starts_with(['#', ';']) {
+                                continue;
+                            }
                             end_line_number = lsp_u32(next_line_num);
 
                             let indent_byte = next_line.find(next_line_trimmed).unwrap_or(0);
@@ -746,6 +751,54 @@ mod tests {
         assert_eq!(third_span.line, 3);
         assert_eq!(third_span.start, 4);
         assert_eq!(third_span.end, 18);
+    }
+
+    #[test]
+    fn test_parse_multiline_skips_comment_inside_continuation() {
+        let parser = SystemdParser::new();
+        let content = "[Service]\nExecStart=/bin/echo a \\\n# explain the next flag\n  b\n";
+
+        let parsed = parser.parse(content);
+        let service_section = parsed
+            .sections
+            .get("Service")
+            .expect("Service section missing");
+        let exec_start = service_section
+            .directives
+            .iter()
+            .find(|directive| directive.key == "ExecStart")
+            .expect("ExecStart directive missing");
+
+        assert_eq!(exec_start.value, "/bin/echo a b");
+        assert_eq!(exec_start.line_number, 1);
+        assert_eq!(exec_start.end_line_number, 3);
+        assert_eq!(exec_start.value_spans.len(), 2);
+        assert_eq!(exec_start.value_spans[0].line, 1);
+        assert_eq!(exec_start.value_spans[1].line, 3);
+        assert!(!exec_start
+            .value_spans
+            .iter()
+            .any(|span| span.line == 2));
+    }
+
+    #[test]
+    fn test_parse_multiline_skips_semicolon_comment_inside_continuation() {
+        let parser = SystemdParser::new();
+        let content = "[Service]\nExecStart=/bin/echo a \\\n; explain the next flag\n  b\n";
+
+        let parsed = parser.parse(content);
+        let exec_start = parsed.sections["Service"]
+            .directives
+            .iter()
+            .find(|directive| directive.key == "ExecStart")
+            .expect("ExecStart directive missing");
+
+        assert_eq!(exec_start.value, "/bin/echo a b");
+        assert_eq!(exec_start.value_spans.len(), 2);
+        assert!(!exec_start
+            .value_spans
+            .iter()
+            .any(|span| span.line == 2));
     }
 
     #[test]
