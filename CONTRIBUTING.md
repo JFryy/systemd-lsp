@@ -52,6 +52,14 @@ To add a new section or manual page:
 
 Allowed values for a directive (for example `Type=` or `Restart=`) are maintained by hand in `SystemdConstants::valid_values_for_section` in `src/constants.rs`.
 
+## Releasing (maintainers)
+
+Versions are dates. `Cargo.toml` uses `YYYY.M.D` without leading zeros (Cargo requires this), and the Git tag uses `vYYYY.MM.DD` (for example `2026.11.3` is tagged `v2026.11.03`). Packagers track the tags, so keep this format.
+
+1. Open a PR that sets `version` in `Cargo.toml` to the release date and updates `Cargo.lock` (`cargo build` does this).
+2. After it merges, run the Release workflow from the Actions tab. It refuses to run if the tag already exists, builds and tests every target, creates the GitHub release with generated notes and `SHA256SUMS`, then publishes to crates.io.
+3. Label merged PRs `bug`, `enhancement` or `dependencies` so they land in the right section of the release notes.
+
 ## Reporting bugs
 
 Please use the bug report template and include the systemd-lsp version, your editor, and the smallest unit file that reproduces the problem.
