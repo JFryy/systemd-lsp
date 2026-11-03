@@ -6,9 +6,9 @@ use crate::constants::SystemdConstants;
 use crate::parser::SystemdParser;
 
 #[derive(Debug)]
-// this is the shared file for loading the embedded documentation
+// Directory holding one documentation file per section, private to this process
 pub struct SystemdDefinitionProvider {
-    shared_temp_file: Option<PathBuf>,
+    docs_dir: Option<PathBuf>,
 }
 
 impl Default for SystemdDefinitionProvider {
@@ -19,30 +19,23 @@ impl Default for SystemdDefinitionProvider {
 
 impl SystemdDefinitionProvider {
     pub fn new() -> Self {
-        // Create a single shared temp file for all documentation
-        let shared_temp_file = if let Ok(temp_dir) = std::env::temp_dir().canonicalize() {
-            let temp_file = temp_dir.join("systemdls-documentation.md");
-
-            // Create the file with initial content if it doesn't exist
-            if !temp_file.exists() {
-                let initial_content = "# systemd Documentation\n\nSelect a section header and use goto definition to view documentation.\n";
-                if std::fs::write(&temp_file, initial_content).is_ok() {
-                    debug!("Created shared temp file for documentation");
-                    Some(temp_file)
-                } else {
-                    debug!("Failed to create shared temp file");
-                    None
-                }
-            } else {
-                debug!("Reusing existing shared temp file");
-                Some(temp_file)
+        // Include the process ID so that several running servers don't share files
+        let docs_dir = match std::env::temp_dir().canonicalize() {
+            Ok(temp_dir) => Some(temp_dir.join(format!("systemd-lsp-{}", std::process::id()))),
+            Err(e) => {
+                debug!("Failed to get temp directory: {e}");
+                None
             }
-        } else {
-            debug!("Failed to get temp directory");
-            None
         };
 
-        Self { shared_temp_file }
+        Self { docs_dir }
+    }
+
+    #[cfg(test)]
+    fn with_docs_dir(docs_dir: PathBuf) -> Self {
+        Self {
+            docs_dir: Some(docs_dir),
+        }
     }
 
     pub fn get_definition(
@@ -84,23 +77,31 @@ impl SystemdDefinitionProvider {
         &self,
         section_name: &str,
     ) -> Option<GotoDefinitionResponse> {
-        let content = SystemdConstants::section_documentation_for(section_name);
+        let Some(content) = SystemdConstants::section_documentation_for(section_name) else {
+            debug!("No documentation available for section: {section_name}");
+            return None;
+        };
+        let docs_dir = self.docs_dir.as_ref()?;
 
-        // Update the shared temp file with the requested section's documentation
-        if let Some(temp_file) = &self.shared_temp_file {
-            if let Some(content) = content {
-                if std::fs::write(temp_file, content).is_ok() {
-                    debug!("Updated shared temp file with {section_name} documentation");
-                    if let Some(uri) = Uri::from_file_path(temp_file) {
-                        let location = Location::new(uri, Range::default());
-                        return Some(GotoDefinitionResponse::Scalar(location));
-                    }
-                }
+        // Section names only reach this point if they match a known section,
+        // so the lowercased name is safe to use as a file name.
+        let doc_file = docs_dir.join(format!("{}.md", section_name.to_ascii_lowercase()));
+
+        if !doc_file.exists() {
+            if let Err(e) =
+                std::fs::create_dir_all(docs_dir).and_then(|()| std::fs::write(&doc_file, content))
+            {
+                debug!("Failed to write {section_name} documentation: {e}");
+                return None;
             }
+            debug!("Wrote {section_name} documentation to {doc_file:?}");
         }
 
-        debug!("No documentation available for section: {section_name}");
-        None
+        let uri = Uri::from_file_path(&doc_file)?;
+        Some(GotoDefinitionResponse::Scalar(Location::new(
+            uri,
+            Range::default(),
+        )))
     }
 
     /// Get embedded documentation for a section
@@ -110,12 +111,12 @@ impl SystemdDefinitionProvider {
 
     /// Clean up temporary documentation files
     pub fn cleanup_temp_files(&self) {
-        if let Some(temp_file) = &self.shared_temp_file {
-            if temp_file.exists() {
-                if let Err(e) = std::fs::remove_file(temp_file) {
-                    debug!("Failed to remove shared temp file: {e}");
+        if let Some(docs_dir) = &self.docs_dir {
+            if docs_dir.exists() {
+                if let Err(e) = std::fs::remove_dir_all(docs_dir) {
+                    debug!("Failed to remove documentation directory: {e}");
                 } else {
-                    debug!("Cleaned up shared temp file");
+                    debug!("Cleaned up documentation directory");
                 }
             }
         }
@@ -169,10 +170,88 @@ mod tests {
         let Some(GotoDefinitionResponse::Scalar(location)) = result else {
             panic!("expected a scalar location, got {result:?}");
         };
-        assert!(location
-            .uri
-            .to_string()
-            .contains("systemdls-documentation.md"));
+        let expected_dir = format!("systemd-lsp-{}", std::process::id());
+        assert!(location.uri.to_string().contains(&expected_dir));
+        assert!(location.uri.to_string().ends_with("unit.md"));
+
+        provider.cleanup_temp_files();
+    }
+
+    fn test_docs_dir(name: &str) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("systemd-lsp-test-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        dir
+    }
+
+    fn definition_uri(
+        provider: &SystemdDefinitionProvider,
+        parser: &SystemdParser,
+        uri: &Uri,
+        line: u32,
+    ) -> Uri {
+        match provider.get_definition(parser, uri, &Position::new(line, 0)) {
+            Some(GotoDefinitionResponse::Scalar(location)) => location.uri,
+            other => panic!("expected a scalar location, got {other:?}"),
+        }
+    }
+
+    fn read_uri(uri: &Uri) -> String {
+        std::fs::read_to_string(uri.to_file_path().unwrap()).unwrap()
+    }
+
+    #[test]
+    fn test_definition_uses_stable_file_per_section() {
+        let provider = SystemdDefinitionProvider::with_docs_dir(test_docs_dir("per-section"));
+        let parser = SystemdParser::new();
+        let content = "[Unit]\nDescription=Test service\n\n[Service]\nType=simple\n";
+        let uri = "file:///test.service".parse::<Uri>().unwrap();
+        parser.update_document(&uri, content);
+
+        let unit_uri = definition_uri(&provider, &parser, &uri, 0);
+        let service_uri = definition_uri(&provider, &parser, &uri, 3);
+        assert_ne!(unit_uri, service_uri);
+
+        // Opening another section must not overwrite the first one
+        assert!(read_uri(&unit_uri).contains("[Unit]"));
+        assert!(read_uri(&service_uri).contains("[Service]"));
+
+        // Later requests return the same URI
+        assert_eq!(definition_uri(&provider, &parser, &uri, 0), unit_uri);
+        assert_eq!(definition_uri(&provider, &parser, &uri, 3), service_uri);
+
+        provider.cleanup_temp_files();
+    }
+
+    #[test]
+    fn test_definition_instances_do_not_share_files() {
+        let first = SystemdDefinitionProvider::with_docs_dir(test_docs_dir("instance-a"));
+        let second = SystemdDefinitionProvider::with_docs_dir(test_docs_dir("instance-b"));
+        let parser = SystemdParser::new();
+        let uri = "file:///test.service".parse::<Uri>().unwrap();
+        parser.update_document(&uri, "[Unit]\nDescription=Test\n");
+
+        let first_uri = definition_uri(&first, &parser, &uri, 0);
+        let second_uri = definition_uri(&second, &parser, &uri, 0);
+        assert_ne!(first_uri, second_uri);
+
+        // Shutting down one instance leaves the other's files in place
+        second.cleanup_temp_files();
+        assert!(!second_uri.to_file_path().unwrap().exists());
+        assert!(read_uri(&first_uri).contains("[Unit]"));
+
+        first.cleanup_temp_files();
+        assert!(!first_uri.to_file_path().unwrap().exists());
+    }
+
+    #[test]
+    fn test_default_docs_dir_is_per_process() {
+        let provider = SystemdDefinitionProvider::new();
+        let docs_dir = provider.docs_dir.expect("temp dir should be available");
+        assert_eq!(
+            docs_dir.file_name().unwrap().to_string_lossy(),
+            format!("systemd-lsp-{}", std::process::id())
+        );
     }
 
     #[test]
@@ -205,7 +284,7 @@ mod tests {
 
     #[test]
     fn test_get_definition_case_insensitive() {
-        let provider = SystemdDefinitionProvider::new();
+        let provider = SystemdDefinitionProvider::with_docs_dir(test_docs_dir("case-insensitive"));
         let parser = SystemdParser::new();
 
         // Test with different case variations
@@ -222,6 +301,8 @@ mod tests {
                 "Failed for section header: {section_header}"
             );
         }
+
+        provider.cleanup_temp_files();
     }
 
     #[test]
