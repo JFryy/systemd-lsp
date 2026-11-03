@@ -736,6 +736,25 @@ mod tests {
     }
 
     #[test]
+    fn test_value_completions_for_killmode_directive() {
+        let completion = SystemdCompletion::new();
+        let parser = SystemdParser::new();
+        let uri = "file:///killmode-test.service".parse::<Uri>().unwrap();
+
+        parser.update_document(&uri, "[Service]\nKillMode=\n");
+
+        let cursor = "KillMode=".chars().count() as u32;
+        let result = completion.get_completions(&parser, &uri, &Position::new(1, cursor));
+
+        let Some(CompletionResponse::Array(items)) = result else {
+            panic!("Expected value completions for KillMode directive");
+        };
+        let mut labels: Vec<&str> = items.iter().map(|item| item.label.as_str()).collect();
+        labels.sort_unstable();
+        assert_eq!(labels, ["control-group", "mixed", "none", "process"]);
+    }
+
+    #[test]
     fn test_no_value_completions_for_freeform_directive() {
         let completion = SystemdCompletion::new();
         let parser = SystemdParser::new();
