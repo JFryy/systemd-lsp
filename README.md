@@ -144,4 +144,4 @@ server has the somewhat unique difficulty of maintaing a large static list of di
 Any systemD experts would be appreciated for their input, feedback, or maintaining of this language server while the latter half of bugs are squashed out.
 
 ## Contributing
-Contributions are always encouraged and welcome. Please provide details and tests if appropriate for your changes.
+Contributions are always encouraged and welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, CI checks, and how to update directives from the systemd manuals.
