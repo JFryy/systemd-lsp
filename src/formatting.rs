@@ -53,7 +53,7 @@ impl SystemdFormatter {
             }
 
             // Handle comments - preserve but clean whitespace
-            if trimmed.starts_with('#') {
+            if trimmed.starts_with(['#', ';']) {
                 result.push(trimmed.to_string());
                 continue;
             }
@@ -128,6 +128,16 @@ mod tests {
         let formatter = SystemdFormatter::new();
         let input = "# This is a comment\n[Unit]\n# Another comment\nDescription=Test\n";
         let expected = "# This is a comment\n[Unit]\n# Another comment\nDescription=Test\n";
+
+        let formatted = formatter.apply_opinionated_formatting(input);
+        assert_eq!(formatted, expected);
+    }
+
+    #[test]
+    fn test_opinionated_formatting_preserves_semicolon_comments() {
+        let formatter = SystemdFormatter::new();
+        let input = "[Service]\n  ; Restart = always\nType=simple\n";
+        let expected = "[Service]\n; Restart = always\nType=simple\n";
 
         let formatted = formatter.apply_opinionated_formatting(input);
         assert_eq!(formatted, expected);

@@ -101,7 +101,16 @@ impl SystemdDiagnostics {
         directive: &SystemdDirective,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        if section.name == "Service" && directive.key == "ExecStart" && directive.value.is_empty() {
+        // An empty ExecStart= resets the command list, which is valid when a later ExecStart= follows.
+        if section.name == "Service"
+            && directive.key == "ExecStart"
+            && directive.value.is_empty()
+            && !section.directives.iter().any(|other| {
+                other.key == "ExecStart"
+                    && !other.value.is_empty()
+                    && other.line_number > directive.line_number
+            })
+        {
             diagnostics.push(Self::create_value_diagnostic(
                 directive,
                 "ExecStart cannot be empty".to_string(),
@@ -257,6 +266,31 @@ mod tests {
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].message, "ExecStart cannot be empty");
         assert_eq!(result[0].severity, Some(DiagnosticSeverity::ERROR));
+    }
+
+    #[test]
+    fn test_empty_execstart_reset_followed_by_command() {
+        let unit = create_test_unit(vec![(
+            "Service",
+            vec![("ExecStart", ""), ("ExecStart", "/usr/bin/new")],
+        )]);
+
+        let result = SystemdDiagnostics::new().diagnose(&unit);
+
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_empty_execstart_after_command_is_reported() {
+        let unit = create_test_unit(vec![(
+            "Service",
+            vec![("ExecStart", "/usr/bin/old"), ("ExecStart", "")],
+        )]);
+
+        let result = SystemdDiagnostics::new().diagnose(&unit);
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].message, "ExecStart cannot be empty");
     }
 
     #[test]

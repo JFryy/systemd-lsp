@@ -1,0 +1,34 @@
+name: Feature request
+description: Suggest a new LSP feature, unit type, directive validation, or editor integration
+labels: ["enhancement"]
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Type
+      options:
+        - Missing directive, section, or unit type
+        - New or stricter validation
+        - New LSP feature
+        - Editor integration or packaging
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What are you trying to do, and what is missing today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: For validation changes, link the systemd or Podman documentation that defines the expected behaviour.
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contribution
+      options:
+        - label: I am willing to open a pull request for this
