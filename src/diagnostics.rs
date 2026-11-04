@@ -354,6 +354,39 @@ mod tests {
     }
 
     #[test]
+    fn test_valid_collectmode_values() {
+        for value in ["inactive", "inactive-or-failed"] {
+            let unit = create_test_unit(vec![("Unit", vec![("CollectMode", value)])]);
+
+            let result = SystemdDiagnostics::new().diagnose(&unit);
+
+            assert!(
+                result.is_empty(),
+                "CollectMode={value} should be valid, got {result:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_invalid_collectmode_value_diagnostic() {
+        // "failed" is a unit state mentioned by the docs, not a CollectMode= value.
+        for value in ["bogus", "failed"] {
+            let unit = create_test_unit(vec![("Unit", vec![("CollectMode", value)])]);
+
+            let result = SystemdDiagnostics::new().diagnose(&unit);
+
+            assert_eq!(result.len(), 1, "CollectMode={value}");
+            assert_eq!(
+                result[0].message,
+                format!(
+                    "Invalid CollectMode value '{value}'. Valid values: inactive, inactive-or-failed"
+                )
+            );
+            assert_eq!(result[0].severity, Some(DiagnosticSeverity::ERROR));
+        }
+    }
+
+    #[test]
     fn test_multiple_diagnostics() {
         let unit = create_test_unit(vec![
             ("InvalidSection", vec![("SomeKey", "SomeValue")]),

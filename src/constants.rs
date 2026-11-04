@@ -306,6 +306,7 @@ impl SystemdConstants {
             ("Service" | "Socket" | "Mount" | "Swap" | "Scope", "KillMode") => {
                 Some(&["control-group", "mixed", "process", "none"])
             }
+            ("Unit", "CollectMode") => Some(&["inactive", "inactive-or-failed"]),
             _ => Self::valid_values().get(directive).copied(),
         }
     }
