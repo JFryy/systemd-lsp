@@ -354,6 +354,43 @@ mod tests {
     }
 
     #[test]
+    fn test_valid_oompolicy_values_in_service_and_scope() {
+        for section in ["Service", "Scope"] {
+            for value in ["continue", "stop", "kill"] {
+                let unit = create_test_unit(vec![(section, vec![("OOMPolicy", value)])]);
+
+                let result = SystemdDiagnostics::new().diagnose(&unit);
+
+                assert!(
+                    result.is_empty(),
+                    "OOMPolicy={value} in [{section}] should be valid, got {result:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_invalid_oompolicy_value_diagnostic() {
+        for section in ["Service", "Scope"] {
+            let unit = create_test_unit(vec![(section, vec![("OOMPolicy", "bogus")])]);
+
+            let result = SystemdDiagnostics::new().diagnose(&unit);
+
+            assert_eq!(result.len(), 1, "[{section}]");
+            assert_eq!(
+                result[0].message,
+                "Invalid OOMPolicy value 'bogus'. Valid values: continue, stop, kill"
+            );
+            assert_eq!(result[0].severity, Some(DiagnosticSeverity::ERROR));
+            // Test helper line is 1 in the first section; value starts after "OOMPolicy=".
+            assert_eq!(
+                result[0].range,
+                Range::new(Position::new(1, 10), Position::new(1, 15))
+            );
+        }
+    }
+
+    #[test]
     fn test_multiple_diagnostics() {
         let unit = create_test_unit(vec![
             ("InvalidSection", vec![("SomeKey", "SomeValue")]),

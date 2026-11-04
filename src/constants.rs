@@ -306,6 +306,8 @@ impl SystemdConstants {
             ("Service" | "Socket" | "Mount" | "Swap" | "Scope", "KillMode") => {
                 Some(&["control-group", "mixed", "process", "none"])
             }
+            // OOMPolicy= is documented for service and scope units.
+            ("Service" | "Scope", "OOMPolicy") => Some(&["continue", "stop", "kill"]),
             _ => Self::valid_values().get(directive).copied(),
         }
     }
