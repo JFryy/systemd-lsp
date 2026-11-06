@@ -30,6 +30,12 @@ make gen-docs-check   # only needed if you touched docs/ or tools/doc-sync/
 - Add a test for any behaviour change. Parser, diagnostics, and formatter tests live next to the code in `src/`; end-to-end tests are in `tests/`.
 - Diagnostics should follow what systemd itself accepts. If you are unsure, link the relevant man page section in the PR.
 
+## AI-assisted contributions
+
+AI-assisted pull requests are permitted. You are responsible for the change: review and understand every line, test it locally, and be ready to explain and revise it during review.
+
+Drive-by pull requests generated mostly by AI with minimal human involvement will be closed. This includes changes that were not tested, do not address an existing issue or clear problem, or whose author cannot answer questions about them without AI assistance.
+
 ## Project layout
 
 - `src/main.rs`: LSP server and request handlers.
