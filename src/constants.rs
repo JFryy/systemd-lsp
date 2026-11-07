@@ -223,8 +223,11 @@ impl SystemdConstants {
             &["true", "false", "read-only", "tmpfs", "yes", "no"] as &[&str],
         );
 
-        // Boolean values for security directives
-        let boolean_values = &["true", "false", "yes", "no", "1", "0"] as &[&str];
+        // Boolean values for security directives. systemd,unit(5) accepts
+        // 1/yes/y/true/t/on and 0/no/n/false/f/off for every boolean flag.
+        let boolean_values = &[
+            "1", "0", "yes", "no", "y", "n", "true", "false", "t", "f", "on", "off",
+        ] as &[&str];
         map.insert("NoNewPrivileges", boolean_values);
         map.insert("PrivateDevices", boolean_values);
         map.insert("PrivateNetwork", boolean_values);
@@ -250,6 +253,11 @@ impl SystemdConstants {
             "PrivateTmp",
             &["true", "false", "yes", "no", "1", "0", "disconnected"] as &[&str],
         );
+
+        // Accept (socket(5)) and Persistent (timer(5)) are genuine booleans;
+        // every systemd boolean spelling is valid for them.
+        map.insert("Accept", boolean_values);
+        map.insert("Persistent", boolean_values);
 
         // DevicePolicy values
         map.insert("DevicePolicy", &["auto", "closed", "strict"] as &[&str]);
@@ -409,6 +417,31 @@ fn find_key_ignore_case<V>(map: &HashMap<&'static str, V>, name: &str) -> Option
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const CANONICAL_BOOLEANS: [&str; 12] = [
+        "1", "0", "yes", "no", "y", "n", "true", "false", "t", "f", "on", "off",
+    ];
+
+    #[test]
+    fn accept_and_persistent_accept_every_boolean_spelling() {
+        // socket(5) Accept= and timer(5) Persistent= are genuine booleans:
+        // every systemd boolean spelling must pass validation.
+        for (section, directive) in [("Socket", "Accept"), ("Timer", "Persistent")] {
+            let values = SystemdConstants::valid_values_for_section(section, directive)
+                .unwrap_or_else(|| panic!("{section} {directive}= has no valid values"));
+
+            for value in CANONICAL_BOOLEANS {
+                assert!(
+                    values.contains(&value),
+                    "{section} {directive}={value} should be valid"
+                );
+            }
+            assert!(
+                !values.contains(&"maybe"),
+                "{section} {directive}=maybe should not be valid"
+            );
+        }
+    }
 
     #[test]
     fn test_valid_sections_not_empty() {
