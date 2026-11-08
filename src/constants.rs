@@ -3,6 +3,11 @@ use std::sync::OnceLock;
 
 pub struct SystemdConstants;
 
+/// Spellings accepted by systemd's parse_boolean().
+const BOOLEAN_VALUES: &[&str] = &[
+    "true", "false", "yes", "no", "1", "0", "on", "off", "y", "n", "t", "f",
+];
+
 /// Lookup tables are built on first use and shared for the life of the process.
 macro_rules! cached {
     ($ty:ty, $build:expr) => {{
@@ -224,7 +229,7 @@ impl SystemdConstants {
         );
 
         // Boolean values for security directives
-        let boolean_values = &["true", "false", "yes", "no", "1", "0"] as &[&str];
+        let boolean_values = BOOLEAN_VALUES;
         map.insert("NoNewPrivileges", boolean_values);
         map.insert("PrivateDevices", boolean_values);
         map.insert("PrivateNetwork", boolean_values);
@@ -248,7 +253,21 @@ impl SystemdConstants {
         // PrivateTmp with additional 'disconnected' value
         map.insert(
             "PrivateTmp",
-            &["true", "false", "yes", "no", "1", "0", "disconnected"] as &[&str],
+            &[
+                "true",
+                "false",
+                "yes",
+                "no",
+                "1",
+                "0",
+                "on",
+                "off",
+                "y",
+                "n",
+                "t",
+                "f",
+                "disconnected",
+            ] as &[&str],
         );
 
         // DevicePolicy values
@@ -306,6 +325,7 @@ impl SystemdConstants {
             ("Service" | "Socket" | "Mount" | "Swap" | "Scope", "KillMode") => {
                 Some(&["control-group", "mixed", "process", "none"])
             }
+            ("Socket", "Accept") | ("Timer", "Persistent") => Some(BOOLEAN_VALUES),
             _ => Self::valid_values().get(directive).copied(),
         }
     }
