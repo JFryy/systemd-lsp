@@ -755,6 +755,37 @@ mod tests {
     }
 
     #[test]
+    fn test_value_completions_for_boolean_accept_and_persistent() {
+        for (file, content, key) in [
+            ("accept-test.socket", "[Socket]\nAccept=\n", "Accept"),
+            (
+                "persistent-test.timer",
+                "[Timer]\nPersistent=\n",
+                "Persistent",
+            ),
+        ] {
+            let completion = SystemdCompletion::new();
+            let parser = SystemdParser::new();
+            let uri = format!("file:///{file}").parse::<Uri>().unwrap();
+
+            parser.update_document(&uri, content);
+
+            let cursor = format!("{key}=").chars().count() as u32;
+            let result = completion.get_completions(&parser, &uri, &Position::new(1, cursor));
+
+            let Some(CompletionResponse::Array(items)) = result else {
+                panic!("Expected value completions for {key} directive");
+            };
+            for value in ["yes", "no", "true", "false"] {
+                assert!(
+                    items.iter().any(|item| item.label == value),
+                    "{key}= should offer '{value}'"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn test_no_value_completions_for_freeform_directive() {
         let completion = SystemdCompletion::new();
         let parser = SystemdParser::new();

@@ -353,6 +353,71 @@ mod tests {
         assert!(result[0].message.starts_with("Invalid KillMode value ''"));
     }
 
+    // Every spelling accepted by systemd's parse_boolean().
+    const BOOLEAN_SPELLINGS: [&str; 12] = [
+        "1", "yes", "y", "true", "t", "on", "0", "no", "n", "false", "f", "off",
+    ];
+
+    #[test]
+    fn test_valid_boolean_values_for_accept_and_persistent() {
+        for (section, key) in [("Socket", "Accept"), ("Timer", "Persistent")] {
+            for value in BOOLEAN_SPELLINGS {
+                let unit = create_test_unit(vec![(section, vec![(key, value)])]);
+
+                let result = SystemdDiagnostics::new().diagnose(&unit);
+
+                assert!(
+                    result.is_empty(),
+                    "{key}={value} in [{section}] should be valid, got {result:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_invalid_boolean_value_for_accept_and_persistent() {
+        for (section, key) in [("Socket", "Accept"), ("Timer", "Persistent")] {
+            let unit = create_test_unit(vec![(section, vec![(key, "maybe")])]);
+
+            let result = SystemdDiagnostics::new().diagnose(&unit);
+
+            assert_eq!(result.len(), 1, "[{section}] {key}=");
+            assert_eq!(
+                result[0].message,
+                format!(
+                    "Invalid {key} value 'maybe'. \
+                     Valid values: true, false, yes, no, 1, 0, on, off, y, n, t, f"
+                )
+            );
+            assert_eq!(result[0].severity, Some(DiagnosticSeverity::ERROR));
+            // Test helper line is 1 in the first section; value starts after "{key}=".
+            let value_start = key.len() as u32 + 1;
+            assert_eq!(
+                result[0].range,
+                Range::new(
+                    Position::new(1, value_start),
+                    Position::new(1, value_start + "maybe".len() as u32)
+                )
+            );
+        }
+    }
+
+    #[test]
+    fn test_all_boolean_spellings_valid_for_existing_boolean_directives() {
+        for key in ["NoNewPrivileges", "PrivateTmp"] {
+            for value in BOOLEAN_SPELLINGS {
+                let unit = create_test_unit(vec![("Service", vec![(key, value)])]);
+
+                let result = SystemdDiagnostics::new().diagnose(&unit);
+
+                assert!(
+                    result.is_empty(),
+                    "{key}={value} should be valid, got {result:?}"
+                );
+            }
+        }
+    }
+
     #[test]
     fn test_multiple_diagnostics() {
         let unit = create_test_unit(vec![
