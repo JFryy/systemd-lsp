@@ -170,6 +170,13 @@ impl SystemdParser {
                     while continuation {
                         if let Some((next_line_num, next_line)) = lines.next() {
                             let next_line_trimmed = next_line.trim();
+
+                            if next_line_trimmed.is_empty()
+                                || next_line_trimmed.starts_with(['#', ';'])
+                            {
+                                continue;
+                            }
+
                             end_line_number = lsp_u32(next_line_num);
 
                             let indent_byte = next_line.find(next_line_trimmed).unwrap_or(0);
@@ -705,6 +712,27 @@ mod tests {
             .iter()
             .find(|directive| directive.key == "type")
             .is_some());
+    }
+
+    #[test]
+    fn test_parse_multiline_directive_skips_comments() {
+        let parser = SystemdParser::new();
+        let content = "[Service]\nExecStart=/bin/echo a \\\n# explain the next argument\n; another comment\n  b\n";
+
+        let parsed = parser.parse(content);
+        let exec_start = &parsed.sections["Service"].directives[0];
+
+        assert_eq!(exec_start.value, "/bin/echo a b");
+        assert_eq!(exec_start.line_number, 1);
+        assert_eq!(exec_start.end_line_number, 4);
+
+        let spans: Vec<(u32, u32, u32)> = exec_start
+            .value_spans
+            .iter()
+            .map(|span| (span.line, span.start, span.end))
+            .collect();
+
+        assert_eq!(spans, [(1, 10, 21), (4, 2, 3)]);
     }
 
     #[test]
