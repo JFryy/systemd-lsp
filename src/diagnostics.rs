@@ -307,6 +307,31 @@ mod tests {
     }
 
     #[test]
+    fn test_exittype_value_diagnostic() {
+        for value in ["main", "cgroup"] {
+            let unit = create_test_unit(vec![("Service", vec![("ExitType", value)])]);
+
+            let result = SystemdDiagnostics::new().diagnose(&unit);
+
+            assert!(
+                result.is_empty(),
+                "ExitType={value} should be valid, got {result:?}"
+            );
+        }
+
+        let unit = create_test_unit(vec![("Service", vec![("ExitType", "bogus")])]);
+
+        let result = SystemdDiagnostics::new().diagnose(&unit);
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(
+            result[0].message,
+            "Invalid ExitType value 'bogus'. Valid values: main, cgroup"
+        );
+        assert_eq!(result[0].severity, Some(DiagnosticSeverity::ERROR));
+    }
+
+    #[test]
     fn test_valid_killmode_values_in_all_kill_sections() {
         for section in ["Service", "Socket", "Mount", "Swap", "Scope"] {
             for value in ["control-group", "mixed", "process", "none"] {
