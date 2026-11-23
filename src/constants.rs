@@ -297,6 +297,7 @@ impl SystemdConstants {
                 "notify-reload",
                 "idle",
             ]),
+            ("Service", "ExitType") => Some(&["main", "cgroup"]),
             ("Mount", "Type") => Some(&[
                 "ext4", "ext3", "ext2", "xfs", "btrfs", "vfat", "ntfs", "exfat", "iso9660",
                 "tmpfs", "proc", "sysfs", "devpts", "nfs", "nfs4", "cifs", "sshfs", "bind",
