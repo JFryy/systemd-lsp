@@ -58,13 +58,20 @@ impl SystemdDiagnostics {
     fn validate_section(&self, section: &SystemdSection, diagnostics: &mut Vec<Diagnostic>) {
         if !self.valid_sections.contains(section.name.as_str()) {
             let header_width = utf16_len(&section.name) + 2;
+            let message = match SystemdConstants::canonical_section(&section.name) {
+                Some(canonical) => format!(
+                    "Unknown section: [{}]. Did you mean [{canonical}]?",
+                    section.name
+                ),
+                None => format!("Unknown section: [{}]", section.name),
+            };
             for &(header_line, _) in &section.line_ranges {
                 diagnostics.push(Diagnostic {
                     range: Range::new(
                         Position::new(header_line, 0),
                         Position::new(header_line, header_width),
                     ),
-                    message: format!("Unknown section: [{}]", section.name),
+                    message: message.clone(),
                     severity: Some(DiagnosticSeverity::WARNING),
                     ..Diagnostic::default()
                 });
@@ -241,6 +248,19 @@ mod tests {
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].message, "Unknown section: [InvalidSection]");
         assert_eq!(result[0].range.start.line, 0);
+    }
+
+    #[test]
+    fn test_miscased_section_suggests_canonical_name() {
+        let unit = create_test_unit(vec![("service", vec![("ExecStart", "/bin/true")])]);
+
+        let result = SystemdDiagnostics::new().diagnose(&unit);
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(
+            result[0].message,
+            "Unknown section: [service]. Did you mean [Service]?"
+        );
     }
 
     #[test]
